@@ -36,14 +36,14 @@ WSL2: in Ubuntu, follow [macOS, Linux](#macos-linux).
 ## Quickstart
 
 ```bash
-git clone https://github.com/JasonChmn/content-lerobot-bras-students.git tek5_robotics
-cd tek5_robotics
+git clone https://github.com/charlesmadjeri/RoboTop.git
+cd RoboTop
 pixi install
 pixi run build
 pixi run launch --backend sim
 ```
 
-Windows: clone in a path without spaces (e.g. `C:\tek5_robotics`). WSL2: clone in `~/`, not in `/mnt/c/`.
+Windows: clone in a path without spaces (e.g. `C:\RoboTop`). WSL2: clone in `~/`, not in `/mnt/c/`.
 
 In a second terminal: `pixi run rviz2`.
 
@@ -93,7 +93,7 @@ pixi run launch --backend real --port <port>         # or set SO101_PORT
 | `CMakeCache.txt directory … is different` | `pixi run clean`, then rebuild |
 | `ros2 topic list` does not see your nodes | Start each terminal with `pixi run` or `pixi shell` |
 | Windows: `MSVC compiler not found` | Install the Build Tools ([Prerequisites](#prerequisites)), open a new terminal |
-| Windows: odd `colcon` or `ros2` errors | Move the repo to a short path without spaces, e.g. `C:\tek5_robotics` |
+| Windows: odd `colcon` or `ros2` errors | Move the repo to a short path without spaces, e.g. `C:\RoboTop` |
 | Windows: Python edit not taken into account | `pixi run build` (no symlinks on Windows) |
 | Windows: firewall popup for `python.exe` | Cancel: ROS 2 only talks on your machine |
 | WSL2: RViz is slow | Expected: RViz renders on the CPU under WSL |
