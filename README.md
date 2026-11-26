@@ -64,11 +64,7 @@ In a second terminal: `pixi run rviz2`.
 
 ## RViz
 
-`pixi run rviz2` shows a grid and the simulation camera (`/external_cam/image_raw`). To display the arm:
-
-1. **Add** → **RobotModel**.
-2. **Description Topic**: `/robot_description`.
-3. **File** → **Save Config**.
+`pixi run rviz2` shows a grid, the robot model (`/robot_description`) and the simulation camera (`/external_cam/image_raw`). The model is preloaded in `ros2_ws/so101.rviz`, there is nothing to add by hand.
 
 The arm stays "in pieces" until `driver_node` publishes `/joint_states`.
 
