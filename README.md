@@ -70,7 +70,7 @@ In a second terminal: `pixi run rviz2`.
 2. **Description Topic**: `/robot_description`.
 3. **File** → **Save Config**.
 
-The arm stays "in pieces" until `driver_node` publishes `/joint_states`.
+The arm stays "in pieces" until `driver_node` publishes `/joint_states` (see [docs/DRIVER.md](docs/DRIVER.md)).
 
 ## Real arm
 
