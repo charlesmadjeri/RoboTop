@@ -91,7 +91,7 @@ def main():
     if not issue:
         sys.exit(f"branch {branch!r} does not match <trigram>/#<issue>/<desc>")
     if not git(root, "ls-remote", "--heads", "origin", branch):
-        sys.exit("branch not pushed: run ci_local.py, then push it")
+        sys.exit("branch not pushed: push it first")
     if args.ready:
         print(f"pr ready: {mark_ready(branch)['url']}")
         return

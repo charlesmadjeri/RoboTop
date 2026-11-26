@@ -9,7 +9,6 @@ from unittest import mock
 HOOKS = Path(__file__).resolve().parent.parent / "hooks"
 sys.path.insert(0, str(HOOKS))
 
-import ci_stamp  # noqa: E402
 import guard_git  # noqa: E402
 import review_stamp  # noqa: E402
 import size_rules  # noqa: E402
@@ -20,9 +19,6 @@ GOOD_BODY = "## Summary\n\nCloses #12\n\n- Bind the session\n\n## Checklist\n\n-
 
 class GitGuard(unittest.TestCase):
     def setUp(self):
-        patcher = mock.patch.object(ci_stamp, "is_fresh", return_value=True)
-        patcher.start()
-        self.addCleanup(patcher.stop)
         reviewed = mock.patch.object(review_stamp, "is_fresh", return_value=True)
         reviewed.start()
         self.addCleanup(reviewed.stop)
@@ -116,7 +112,7 @@ class GitGuard(unittest.TestCase):
         self.allowed("gh pr list -R charlesmadjeri/RoboTop")
 
 
-class CiStamp(unittest.TestCase):
+class PushWithoutCi(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.TemporaryDirectory()
         self.addCleanup(self.dir.cleanup)
@@ -130,20 +126,9 @@ class CiStamp(unittest.TestCase):
         subprocess.run(["git", "add", "."], cwd=self.repo, check=True)
         subprocess.run(["git", "commit", "-q", "-m", name], cwd=self.repo, check=True)
 
-    def test_push_is_blocked_until_ci_passed_on_this_tree(self):
+    def test_push_of_an_own_branch_needs_no_ci_stamp(self):
         push = "git push -u origin mbo/#12/ci-pipeline"
-        self.assertIn("local CI", guard_git.check(push, self.repo)[0])
-        ci_stamp.write(self.repo)
         self.assertIsNone(guard_git.check(push, self.repo))
-
-    def test_a_new_commit_invalidates_the_stamp(self):
-        ci_stamp.write(self.repo)
-        self.commit("two")
-        self.assertFalse(ci_stamp.is_fresh(self.repo))
-
-    def test_outside_a_repository_never_blocks(self):
-        with tempfile.TemporaryDirectory() as empty:
-            self.assertTrue(ci_stamp.is_fresh(empty))
 
 
 class HookProcess(unittest.TestCase):
