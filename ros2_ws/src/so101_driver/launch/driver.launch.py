@@ -17,6 +17,10 @@ def generate_launch_description():
                               description="Simulated backend or real robot"),
         DeclareLaunchArgument("port", default_value="",
                               description="Serial port of the real SO-ARM101 (lerobot-find-port)"),
+        DeclareLaunchArgument("camera_index", default_value="0",
+                              description="USB camera index of the real arm, -1 disables it"),
+        DeclareLaunchArgument("camera_fov_deg", default_value="70.0",
+                              description="Horizontal field of view used to estimate the camera intrinsics"),
         Node(
             package="so101_driver",
             executable="driver",
@@ -25,6 +29,8 @@ def generate_launch_description():
             parameters=[{
                 "use_sim": ParameterValue(LaunchConfiguration("use_sim"), value_type=bool),
                 "port": LaunchConfiguration("port"),
+                "camera_index": ParameterValue(LaunchConfiguration("camera_index"), value_type=int),
+                "camera_fov_deg": ParameterValue(LaunchConfiguration("camera_fov_deg"), value_type=float),
             }],
         ),
     ])

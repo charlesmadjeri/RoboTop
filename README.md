@@ -76,7 +76,10 @@ In a `pixi shell`, use `lerobot-find-port` and `lerobot-calibrate` as in the
 ```bash
 export SO101_CALIBRATION_FILE=<calibration file>     # PowerShell: $env:SO101_CALIBRATION_FILE = "<file>"
 pixi run launch --backend real --port <port>         # or set SO101_PORT
+pixi run launch --backend real --port <port> --camera-index <n>   # USB camera, or set SO101_CAMERA
 ```
+
+`--camera-index <n>` picks the USB camera of the arm (`-1` disables it). List the indexes with `lerobot-find-cameras opencv`.
 
 - **Linux**: `sudo usermod -aG dialout $USER`, then log out and back in. Another way to find the port, watch it appear when you plug the USB cable:
   `sudo udevadm monitor --subsystem-match=tty --property | grep --line-buffered -E "(DEVNAME=|ACTION=)"`

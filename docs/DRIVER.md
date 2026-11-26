@@ -13,7 +13,7 @@ it, RViz shows the arm "in pieces". The first version of the driver publishing i
 | --- | --- | --- | --- |
 | `/joint_states` | published, 30 Hz | `sensor_msgs/JointState` | 6 joints in radians, in the order of `JOINT_NAMES` |
 | `/joint_command` | subscribed | `sensor_msgs/JointState` | position targets by joint name, arm joints in radians, gripper in 0-100 % |
-| `/external_cam/image_raw`, `/external_cam/camera_info` | published, 10 Hz, sim only | `Image`, `CameraInfo` | provided by `_start_sim_camera` |
+| `/external_cam/image_raw`, `/external_cam/camera_info` | published, 10 Hz | `Image`, `CameraInfo` | sim: provided by `_start_sim_camera`. Real arm: the USB camera read through LeRobot `OpenCVCamera`, published by `frame_publisher.py`, rgb8 |
 
 ## How it works
 
@@ -55,6 +55,20 @@ it, RViz shows the arm "in pieces". The first version of the driver publishing i
 The pure conversions live in `so101_driver/joint_codec.py` (no ROS import), which keeps them testable
 without a robot and keeps `driver_node.py` under the 200-line file limit.
 
+## Camera
+
+On the real arm, the USB camera is published on `/external_cam/image_raw` at 10 Hz (rgb8), with its
+`camera_info`. The simulation publishes the same topics from its own camera, through the same
+`FramePublisher` (`so101_driver/frame_publisher.py`).
+
+- `camera_index`: USB camera index of the real arm, default `0`. `-1` disables the camera. Real arm only.
+  Get the index from `lerobot-find-cameras opencv`.
+- `camera_width`: image width, default `640`.
+- `camera_height`: image height, default `480`.
+- `camera_fov_deg`: horizontal field of view used to estimate the intrinsics, default `70`.
+
+A USB hiccup skips one frame and does not stop the stream.
+
 ## Check it
 
 ```bash
@@ -83,5 +97,6 @@ PYTHONPATH=. PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest test
 - An exception raised by the backend read (for example a USB hiccup on the real arm) is not caught and
   ends the node. Whether to retry or to stop is still to be decided.
 - The simulated camera renders from its own thread while the control timer steps the physics. This is
-  the shortcut already documented in `_sim_camera_loop`.
-- The real arm camera (`/external_cam/image_raw` from USB) is still a TODO.
+  the shortcut already documented in `_start_sim_camera`.
+- The real arm camera intrinsics are an estimate from the field of view (`camera_fov_deg`), with no
+  distortion. A real calibration is needed for accurate pixel to 3D.
