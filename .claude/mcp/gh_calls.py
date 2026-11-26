@@ -5,13 +5,13 @@ import shlex
 import subprocess
 from pathlib import Path
 
-ORG = "ASM-Studios"
+ORG = "charlesmadjeri"
 REPOS = json.loads((Path(__file__).parent / "repos.json").read_text())
 ERROR_LINE = re.compile(r"error|fail|timed out|traceback|assert", re.I)
 
 
 def gh(*args):
-    command = shlex.split(os.environ.get("ZENITH_GH", "gh"))
+    command = shlex.split(os.environ.get("ROBOTOP_GH", "gh"))
     done = subprocess.run([*command, *args], capture_output=True, text=True, timeout=60)
     if done.returncode:
         raise RuntimeError(done.stderr.strip()[:300] or "gh failed")

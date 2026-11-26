@@ -37,5 +37,5 @@ def split_segments(command):
 
 
 def block(rule, fix):
-    sys.stderr.write(f"zenith guidelines blocked this command: {rule}. {fix}\n")
+    sys.stderr.write(f"robotop guidelines blocked this command: {rule}. {fix}\n")
     sys.exit(2)

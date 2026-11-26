@@ -1,6 +1,6 @@
 ---
-name: zenith-ci-triage
-description: Read a failing Zenith CI run and report the failing step and first error line. Read-only.
+name: robotop-ci-triage
+description: Read a failing RoboTop CI run and report the failing step and first error line. Read-only.
 model: haiku
 tools: Bash, Read, Grep
 ---

@@ -85,7 +85,7 @@ def main():
     args = parser.parse_args()
     root = toplevel()
     if not root:
-        sys.exit("not inside the Zenith git repository")
+        sys.exit("not inside the RoboTop git repository")
     branch = git(root, "branch", "--show-current") or ""
     issue = issue_of(branch)
     if not issue:

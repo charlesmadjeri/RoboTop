@@ -2,7 +2,7 @@
   "enabledPlugins": {
     "lucy-guidelines@lucy-robotics": false
   },
-  "enabledMcpjsonServers": ["zenith-gh"],
+  "enabledMcpjsonServers": ["robotop-gh"],
   "hooks": {
     "PreToolUse": [
       {

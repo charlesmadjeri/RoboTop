@@ -31,7 +31,7 @@ def ensure_env(root):
 def main():
     root = Path(sys.argv[1]) if len(sys.argv) > 1 else toplevel()
     if not root:
-        sys.exit("not inside the Zenith git repository")
+        sys.exit("not inside the RoboTop git repository")
     env, created = ensure_env(root)
     print(f"created {env} with generated secrets" if created else f"{env} already exists, left untouched")
 

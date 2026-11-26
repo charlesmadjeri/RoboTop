@@ -61,7 +61,7 @@ def main():
     args = parser.parse_args()
     root = toplevel()
     if not root:
-        sys.exit("not inside the Zenith git repository")
+        sys.exit("not inside the RoboTop git repository")
     tests = None
     for step in STEPS:
         done = run(["npm", "run", step], cwd=root, capture_output=True, text=True)

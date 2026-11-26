@@ -54,7 +54,7 @@ class IssueCreate(unittest.TestCase):
         self.assertIn("contains", issue_create.check_issue("chore(ci): add", f"a {DASH} b"))
 
     def test_reads_the_issue_number_from_its_url(self):
-        self.assertEqual(issue_create.number_of("https://github.com/ASM-Studios/zenith/issues/120\n"), 120)
+        self.assertEqual(issue_create.number_of("https://github.com/charlesmadjeri/RoboTop/issues/120\n"), 120)
 
     def test_detects_a_body_that_github_altered(self):
         with mock.patch.object(issue_create, "gh", return_value=done("a \\`code\\`\n")):
@@ -93,7 +93,7 @@ class PrOpen(unittest.TestCase):
 
     def test_updates_the_body_of_a_pr_that_already_exists(self):
         calls = []
-        pr = {"number": 5, "url": "https://github.com/ASM-Studios/zenith/pull/5"}
+        pr = {"number": 5, "url": "https://github.com/charlesmadjeri/RoboTop/pull/5"}
         with mock.patch.object(pr_open, "find_pr", return_value=pr), mock.patch.object(
             pr_open, "gh", side_effect=lambda *a: calls.append(a) or done()
         ):

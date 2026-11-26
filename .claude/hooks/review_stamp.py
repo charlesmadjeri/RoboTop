@@ -5,7 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 import ci_stamp  # noqa: E402
 
-REPORT_NAME = "zenith-review-report"
+REPORT_NAME = "robotop-review-report"
 USAGE = "usage: review_stamp.py template | review_stamp.py <report file>"
 
 
@@ -61,13 +61,13 @@ def is_fresh(cwd):
 def main():
     root = ci_stamp.git(".", "rev-parse", "--show-toplevel")
     if not root:
-        sys.exit("not inside the Zenith git repository")
+        sys.exit("not inside the RoboTop git repository")
     args = sys.argv[1:]
     if args == ["template"]:
         print(template(root), end="")
         return
     if len(args) != 1 or not Path(args[0]).is_file():
-        sys.exit(f"a stamp needs the report written by the zenith-review skill. {USAGE}")
+        sys.exit(f"a stamp needs the report written by the robotop-review skill. {USAGE}")
     if ci_stamp.git(root, "diff", "--name-only"):
         sys.exit("unstaged changes: stage everything with git add, the report covers the staged tree")
     reason = install(root, Path(args[0]).read_text())

@@ -69,7 +69,7 @@ def main():
     args = parser.parse_args()
     root = toplevel()
     if not root:
-        sys.exit("not inside the Zenith git repository")
+        sys.exit("not inside the RoboTop git repository")
     refs = {}
     for number in args.numbers:
         ref = fetch(root, number)

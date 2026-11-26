@@ -52,7 +52,7 @@ class ReviewReport(unittest.TestCase):
         self.stage("a", "1")
         result = self.stamp()
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("zenith-review", result.stderr)
+        self.assertIn("robotop-review", result.stderr)
         self.assertIsNotNone(guard_git.check(COMMIT, self.repo))
 
     def test_a_report_for_the_staged_tree_unlocks_the_commit(self):
@@ -90,7 +90,7 @@ class ReviewReport(unittest.TestCase):
     def test_the_old_hand_written_stamp_file_no_longer_unlocks(self):
         self.stage("a", "1")
         tree = review_stamp.index_tree(self.repo)
-        (Path(self.repo) / ".git" / "zenith-review-ok").write_text(tree)
+        (Path(self.repo) / ".git" / "robotop-review-ok").write_text(tree)
         self.assertFalse(review_stamp.is_fresh(self.repo))
 
     def test_a_docs_only_change_needs_a_report_too(self):

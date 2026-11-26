@@ -1,7 +1,7 @@
 import subprocess
 from pathlib import Path
 
-STAMP_NAME = "zenith-ci-ok"
+STAMP_NAME = "robotop-ci-ok"
 
 
 def git(cwd, *args):

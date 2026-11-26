@@ -7,12 +7,12 @@ import gh_calls  # noqa: E402
 
 TOOLS = [
     {
-        "name": "zenith_pr_board",
-        "description": "Open PRs by author in the Zenith repo with CI state (green/red/pending).",
+        "name": "robotop_pr_board",
+        "description": "Open PRs by author in the RoboTop repo with CI state (green/red/pending).",
         "inputSchema": {"type": "object", "properties": {"author": {"type": "string"}}},
     },
     {
-        "name": "zenith_ci_failure",
+        "name": "robotop_ci_failure",
         "description": "First error lines of a failed GitHub Actions run.",
         "inputSchema": {
             "type": "object",
@@ -24,9 +24,9 @@ TOOLS = [
 
 
 def call(name, args):
-    if name == "zenith_pr_board":
+    if name == "robotop_pr_board":
         return gh_calls.pr_board(args.get("author", "@me"))
-    if name == "zenith_ci_failure":
+    if name == "robotop_ci_failure":
         return gh_calls.ci_failure(args["repo"], args["run_id"])
     raise KeyError(name)
 
@@ -39,7 +39,7 @@ def handle(message):
         result = {
             "protocolVersion": message["params"].get("protocolVersion", "2025-06-18"),
             "capabilities": {"tools": {}},
-            "serverInfo": {"name": "zenith-gh", "version": "1"},
+            "serverInfo": {"name": "robotop-gh", "version": "1"},
         }
     elif method == "tools/list":
         result = {"tools": TOOLS}

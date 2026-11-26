@@ -33,17 +33,17 @@ def main():
     parser = argparse.ArgumentParser(description="Create the worktree and branch for an issue")
     parser.add_argument("issue", type=int)
     parser.add_argument("desc", help="kebab-case description, e.g. kp-endpoint")
-    parser.add_argument("--trigram", help="defaults to git config zenith.trigram")
+    parser.add_argument("--trigram", help="defaults to git config robotop.trigram")
     parser.add_argument("--base", default="origin/dev")
     parser.add_argument("--no-fetch", action="store_true")
     parser.add_argument("--no-install", action="store_true")
     args = parser.parse_args()
     checkout = main_checkout()
     if not checkout:
-        sys.exit("not inside the Zenith git repository")
-    trigram = args.trigram or git(checkout, "config", "zenith.trigram")
+        sys.exit("not inside the RoboTop git repository")
+    trigram = args.trigram or git(checkout, "config", "robotop.trigram")
     if not trigram:
-        sys.exit("pass --trigram or run: git config zenith.trigram <abc>")
+        sys.exit("pass --trigram or run: git config robotop.trigram <abc>")
     branch = branch_name(trigram, args.issue, args.desc)
     path = worktree_path(checkout, args.issue)
     if path.exists():

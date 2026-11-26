@@ -12,7 +12,7 @@ import env_file  # noqa: E402
 import with_node  # noqa: E402
 import worktree  # noqa: E402
 
-TEMPLATE = "POSTGRES_DB=zenith\n\n# openssl rand -hex 32\nPASSWORD_PEPPER=\nBETTER_AUTH_URL=\n# openssl rand -hex 32\nSET=kept\n"
+TEMPLATE = "POSTGRES_DB=robotop\n\n# openssl rand -hex 32\nPASSWORD_PEPPER=\nBETTER_AUTH_URL=\n# openssl rand -hex 32\nSET=kept\n"
 
 
 class WithNode(unittest.TestCase):
@@ -61,7 +61,7 @@ class EnvFile(unittest.TestCase):
         self.assertIn("PASSWORD_PEPPER=s3cret\n", filled)
         self.assertIn("BETTER_AUTH_URL=\n", filled)
         self.assertIn("SET=kept\n", filled)
-        self.assertIn("POSTGRES_DB=zenith\n", filled)
+        self.assertIn("POSTGRES_DB=robotop\n", filled)
 
     def test_generates_a_distinct_64_hex_secret_each_time(self):
         first, second = (env_file.fill_secrets(TEMPLATE).splitlines()[3] for _ in range(2))
@@ -92,7 +92,7 @@ class Worktree(unittest.TestCase):
                 worktree.branch_name(trigram, 88, desc)
 
     def test_places_the_worktree_next_to_the_main_checkout(self):
-        self.assertEqual(worktree.worktree_path(Path("/p/Zenith"), 88), Path("/p/Zenith-worktrees/88"))
+        self.assertEqual(worktree.worktree_path(Path("/p/RoboTop"), 88), Path("/p/RoboTop-worktrees/88"))
 
 
 class CheckSummary(unittest.TestCase):

@@ -113,7 +113,7 @@ class GitGuard(unittest.TestCase):
 
     def test_unrelated_commands_pass(self):
         self.allowed("ls -la && git status")
-        self.allowed("gh pr list -R ASM-Studios/zenith")
+        self.allowed("gh pr list -R charlesmadjeri/RoboTop")
 
 
 class CiStamp(unittest.TestCase):

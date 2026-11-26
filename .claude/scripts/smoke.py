@@ -120,7 +120,7 @@ def check_stops(stack):
 
 def main():
     parser = argparse.ArgumentParser(description="Start the compose stack, check it, tear it down")
-    parser.add_argument("--project", default="zenith-smoke")
+    parser.add_argument("--project", default="robotop-smoke")
     parser.add_argument("--expect", type=parse_expect, action="append", default=[], metavar="SERVICE:PATTERN")
     parser.add_argument("--timeout", type=int, default=180, help="seconds for readiness and each expected line")
     parser.add_argument("--no-build", action="store_true")
@@ -128,7 +128,7 @@ def main():
     args = parser.parse_args()
     root = toplevel()
     if not root:
-        sys.exit("not inside the Zenith git repository")
+        sys.exit("not inside the RoboTop git repository")
     ensure_env(root)
     stack = Stack(root, args.project)
     up = stack.run("up", "-d", *([] if args.no_build else ["--build"]))

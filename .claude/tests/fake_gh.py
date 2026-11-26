@@ -4,8 +4,8 @@ import sys
 args = sys.argv[1:]
 if args[:2] == ["pr", "list"]:
     repo = args[args.index("-R") + 1]
-    prs = [] if not repo.endswith("zenith") else [
-        {"url": "https://github.com/ASM-Studios/zenith/pull/1", "title": "feat(a): b",
+    prs = [] if not repo.endswith("RoboTop") else [
+        {"url": "https://github.com/charlesmadjeri/RoboTop/pull/1", "title": "feat(a): b",
          "baseRefName": "dev", "isDraft": False,
          "statusCheckRollup": [{"conclusion": "SUCCESS"}, {"conclusion": "FAILURE"}]}
     ]

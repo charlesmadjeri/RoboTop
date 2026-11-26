@@ -76,8 +76,8 @@ def check_commit(args, cwd=""):
         return ("commit with -a", "Stage with `git add`, review the staged diff, then commit.")
     if not review_stamp.is_fresh(cwd):
         return (
-            "commit without a zenith-review of the staged diff",
-            "Run the `zenith-review` skill on `git diff --cached`, fix what it finds, then `python3 .claude/hooks/review_stamp.py`.",
+            "commit without a robotop-review of the staged diff",
+            "Run the `robotop-review` skill on `git diff --cached`, fix what it finds, then `python3 .claude/hooks/review_stamp.py`.",
         )
     return None
 

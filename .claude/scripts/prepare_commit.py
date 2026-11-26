@@ -16,7 +16,7 @@ def main():
     args = parser.parse_args()
     root = toplevel()
     if not root:
-        sys.exit("not inside the Zenith git repository")
+        sys.exit("not inside the RoboTop git repository")
     if not args.skip_check and subprocess.run([sys.executable, str(CHECK)], cwd=root).returncode != 0:
         sys.exit(1)
     subprocess.run(["git", "add", *(args.paths or ["-A"])], cwd=root, check=True)
@@ -32,7 +32,7 @@ def main():
         print(f"size: {rule}. {fix}")
     if hits or oversized:
         sys.exit(1)
-    print("next: zenith-review on `git diff --cached`, then python3 .claude/hooks/review_stamp.py <report file>")
+    print("next: robotop-review on `git diff --cached`, then python3 .claude/hooks/review_stamp.py <report file>")
 
 
 if __name__ == "__main__":

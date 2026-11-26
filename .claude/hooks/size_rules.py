@@ -5,7 +5,7 @@ from ci_stamp import git
 from hookio import RULES
 
 CODE_SUFFIXES = {".ts", ".tsx", ".js", ".py"}
-SPLIT_FIX = "Split it: one sub-issue of the issue per sub-PR (issue_create.py --parent <n>), see zenith-pr, Split PRs."
+SPLIT_FIX = "Split it: one sub-issue of the issue per sub-PR (issue_create.py --parent <n>), see robotop-pr, Split PRs."
 
 
 def parse_numstat(text):
