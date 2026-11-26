@@ -1,0 +1,36 @@
+# pixi / conda
+.pixi/
+*.egg-info/
+
+# ROS 2 / colcon
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+log/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Local env and secrets
+.env
+.env.*
+!.env.example
+
+# Logs and recordings
+*.log
+*.bag
+*.mcap
+rosbag2_*/
