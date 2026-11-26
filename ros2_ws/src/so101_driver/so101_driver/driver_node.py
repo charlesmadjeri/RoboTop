@@ -8,23 +8,23 @@ knows which one runs.
 Todo List:
   - [DONE] Publish /joint_states in RADIANS (>= 20 Hz)
   - [DONE] Subscribe to /joint_command (radians, gripper 0-100 %)
-  - [TODO] Real arm: publish the USB camera on /external_cam/image_raw
+  - [DONE] Real arm: publish the USB camera on /external_cam/image_raw
     (the simulated camera is provided: _start_sim_camera)
 """
 import os
-import threading
-import time
 from pathlib import Path
 
 import rclpy
 import rclpy.node
 from lerobot.robots.so_follower import SO101Follower, SO101FollowerConfig
 from rclpy.executors import ExternalShutdownException
-from cv_bridge import CvBridge
-from sensor_msgs.msg import CameraInfo, Image, JointState
+from sensor_msgs.msg import JointState
 from so101_sim import SO101Sim
 
+from so101_driver.camera_info import build_camera_info, pinhole_intrinsics
+from so101_driver.frame_publisher import FramePublisher
 from so101_driver.joint_codec import JOINT_NAMES, command_to_action, observation_to_positions
+from so101_driver.usb_camera import open_usb_camera
 
 CONTROL_HZ = 50.0
 JOINT_STATE_HZ = 30.0
@@ -63,6 +63,8 @@ class DriverNode(rclpy.node.Node):
 
         if self._use_sim:
             self._start_sim_camera()
+        else:
+            self._start_usb_camera()
 
         self.get_logger().info("Driver node ready.")
 
@@ -114,45 +116,39 @@ class DriverNode(rclpy.node.Node):
 
     def _start_sim_camera(self):
         """Publishes the MuJoCo camera at CAMERA_HZ (provided): /external_cam/image_raw + camera_info."""
-        self._image_pub = self.create_publisher(Image, "/external_cam/image_raw", 1)
-        self._camera_info_pub = self.create_publisher(CameraInfo, "/external_cam/camera_info", 1)
-        K = self._robot.get_camera_intrinsics()
-        self._camera_info = CameraInfo(
-            width=self._robot.camera_width,
-            height=self._robot.camera_height,
-            distortion_model="plumb_bob",
-            d=[0.0] * 5,
-            k=[float(v) for v in K.flatten()],
-            r=[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
-            p=[float(v) for v in K[0]] + [0.0] + [float(v) for v in K[1]] + [0.0] + [float(v) for v in K[2]] + [0.0],
+        camera_info = build_camera_info(
+            self._robot.get_camera_intrinsics().flatten(),
+            self._robot.camera_width,
+            self._robot.camera_height,
+            CAMERA_FRAME,
         )
-        self._camera_info.header.frame_id = CAMERA_FRAME
-        self._camera_stop = threading.Event()
-        # Own thread: a render takes 30-150 ms, it must not delay /joint_states.
-        self._camera_thread = threading.Thread(target=self._sim_camera_loop, daemon=True)
-        self._camera_thread.start()
+        # shortcut: renders while your timers step the physics; fine for a camera image.
+        self._camera_publisher = FramePublisher(self, self._robot.render_camera, camera_info, CAMERA_HZ)
+        self._camera_publisher.start()
 
-    def _sim_camera_loop(self):
-        bridge = CvBridge()
-        next_frame = time.monotonic()
-        while not self._camera_stop.wait(max(0.0, next_frame - time.monotonic())):
-            next_frame += 1.0 / CAMERA_HZ
-            # shortcut: renders while your timers step the physics; fine for a camera image.
-            image = bridge.cv2_to_imgmsg(self._robot.render_camera(), encoding="rgb8")
-            image.header.stamp = self.get_clock().now().to_msg()
-            image.header.frame_id = CAMERA_FRAME
-            self._camera_info.header.stamp = image.header.stamp
-            try:
-                self._image_pub.publish(image)
-                self._camera_info_pub.publish(self._camera_info)
-            except Exception:  # ROS context already shut down (Ctrl-C)
-                return
+    def _start_usb_camera(self):
+        """Publishes the USB camera of the real arm on the same topics as the simulated one."""
+        index: int = self.declare_parameter("camera_index", 0).value
+        width: int = self.declare_parameter("camera_width", 640).value
+        height: int = self.declare_parameter("camera_height", 480).value
+        fov_deg: float = self.declare_parameter("camera_fov_deg", 70.0).value
+        if index < 0:
+            self.get_logger().info("USB camera disabled (camera_index < 0)")
+            return
+        try:
+            camera = open_usb_camera(index, width, height)
+        except Exception:
+            self._robot.disconnect()
+            raise
+        camera_info = build_camera_info(pinhole_intrinsics(width, height, fov_deg), width, height, CAMERA_FRAME)
+        self._camera_publisher = FramePublisher(self, camera.read_latest, camera_info, CAMERA_HZ, on_stop=camera.disconnect)
+        self._camera_publisher.start()
+        self.get_logger().info(f"USB camera {index} published ({width}x{height}, fov {fov_deg} deg)")
 
     def destroy_node(self):
         """Disconnects the backend (provided). On the real arm this disables the torque."""
-        if getattr(self, "_camera_thread", None) is not None:
-            self._camera_stop.set()
-            self._camera_thread.join(timeout=2.0)
+        if getattr(self, "_camera_publisher", None) is not None:
+            self._camera_publisher.stop()
         if self._robot.is_connected:
             self._robot.disconnect()
             self.get_logger().info("Robot disconnected.")
