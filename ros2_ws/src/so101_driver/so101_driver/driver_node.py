@@ -6,8 +6,8 @@ The only node that talks to the backend: SO101Sim (MuJoCo) or SO101Follower
 knows which one runs.
 
 Todo List:
-  - [DONE] Publish /joint_states in RADIANS (>= 20 Hz) DONE
-  - [DONE] Subscribe to /joint_command (radians, gripper 0-100 %) DONE
+  - [DONE] Publish /joint_states in RADIANS (>= 20 Hz)
+  - [DONE] Subscribe to /joint_command (radians, gripper 0-100 %)
   - [TODO] Real arm: publish the USB camera on /external_cam/image_raw
     (the simulated camera is provided: _start_sim_camera)
 """
@@ -24,19 +24,7 @@ from cv_bridge import CvBridge
 from sensor_msgs.msg import CameraInfo, Image, JointState
 from so101_sim import SO101Sim
 
-JOINT_NAMES = [
-    "shoulder_pan",
-    "shoulder_lift",
-    "elbow_flex",
-    "wrist_flex",
-    "wrist_roll",
-    "gripper",
-]
-
-# Gripper joint limits in the URDF (rad).
-# LeRobot convention: 0 % = closed (lower), 100 % = open (upper).
-GRIPPER_RANGE_RAD = (-0.174533, 1.74533)
-
+from so101_driver.joint_codec import JOINT_NAMES, command_to_action, observation_to_positions
 
 CONTROL_HZ = 50.0
 JOINT_STATE_HZ = 30.0
@@ -52,13 +40,6 @@ def _calibration_file() -> Path:
     return Path(path).expanduser()
 
 
-def _gripper_pct_to_rad(pct: float) -> float:
-    #error handling, 0 <= pct >= 100
-    pct = max(0.0, min(100.0, float(pct)))
-
-    low, high = GRIPPER_RANGE_RAD 
-    return low + (pct / 100) * (high - low)
-
 class DriverNode(rclpy.node.Node):
     """Driver SO-ARM101: /joint_command -> backend -> /joint_states."""
 
@@ -71,18 +52,12 @@ class DriverNode(rclpy.node.Node):
         self._robot = self._connect_arm(port)
         self.get_logger().info(f"Robot connected: {type(self._robot).__name__}")
 
-        # Mémoire de la dernière commande reçue (format attendu par LeRobot/SO101Sim)
-        self._last_command: dict[str, float] | None = None
+        self._pending_action: dict[str, float] = {}
+        self._observation = self._robot.get_observation()
 
-        # 1. Publisher pour envoyer la position actuelle du bras à RViz2 et brain_node
         self._joint_state_pub = self.create_publisher(JointState, "/joint_states", 10)
+        self._joint_cmd_sub = self.create_subscription(JointState, "/joint_command", self._cb_joint_command, 10)
 
-        # 2. Subscriber pour écouter les ordres venant de brain_node (ou du terminal)
-        self._joint_cmd_sub = self.create_subscription(
-            JointState, "/joint_command", self._cb_joint_command, 10
-        )
-
-        # 3. Timers pour cadencer la boucle de contrôle (50 Hz) et l'envoi d'état (30 Hz)
         self.create_timer(1.0 / CONTROL_HZ, self._control_step)
         self.create_timer(1.0 / JOINT_STATE_HZ, self._publish_joint_states)
 
@@ -92,36 +67,17 @@ class DriverNode(rclpy.node.Node):
         self.get_logger().info("Driver node ready.")
 
     def _cb_joint_command(self, msg: JointState):
-        # On associe chaque nom de joint reçu à sa position cible
-        cmd = {}
-        for name, pos in zip(msg.name, msg.position):
-            if name in JOINT_NAMES:
-                # L'API attend "nom_du_joint.pos" (radians pour le bras, 0-100 % pour gripper)
-                cmd[f"{name}.pos"] = float(pos)
-        if cmd:
-            self._last_command = cmd
+        self._pending_action.update(command_to_action(list(msg.name), list(msg.position)))
 
     def _control_step(self):
-        # On envoie la dernière commande connue au robot à 50 Hz
-        if self._last_command is not None:
-            self._robot.send_action(self._last_command)
+        if self._pending_action:
+            self._robot.send_action(self._pending_action)
+            self._pending_action = {}
+        self._observation = self._robot.get_observation()
 
     def _publish_joint_states(self):
-        # On lit l'état actuel des capteurs/moteurs
-        obs = self._robot.get_observation()
-
-        msg = JointState()
+        msg = JointState(name=list(JOINT_NAMES), position=observation_to_positions(self._observation))
         msg.header.stamp = self.get_clock().now().to_msg()
-        msg.name = JOINT_NAMES
-        positions = []
-        for name in JOINT_NAMES:
-            val = float(obs[f"{name}.pos"])
-            if name == "gripper":
-                # Conversion % -> radians pour RViz2
-                val = _gripper_pct_to_rad(val)
-            positions.append(val)
-
-        msg.position = positions
         self._joint_state_pub.publish(msg)
 
     def _connect_arm(self, port: str) -> SO101Sim | SO101Follower:
