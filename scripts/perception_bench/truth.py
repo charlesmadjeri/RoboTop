@@ -4,6 +4,7 @@ from math import sqrt
 import numpy as np
 
 Point = tuple[float, float]
+Bounds = tuple[int, int, int, int]
 
 
 @dataclass(frozen=True)
@@ -11,6 +12,7 @@ class Target:
     visible_px: int
     full_px: int
     centroid: Point | None
+    bounds: Bounds | None = None
 
     @property
     def visible_fraction(self) -> float:

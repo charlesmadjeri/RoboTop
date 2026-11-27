@@ -7,12 +7,12 @@ import cv2
 import numpy as np
 
 from perception_bench import metrics, report, report_motion, scenarios, sequence_metrics, sequences
-from perception_bench.methods import METHODS
+from perception_bench.methods import DEFAULT_METHODS, MARKER_METHODS, METHODS
 from perception_bench.render import capture
 from perception_bench.scene import Scene
 
 LATENCY_FRAMES = 30
-RESOLUTIONS = {"320x240": 1, "640x480": 2}
+RESOLUTIONS = ((320, 240), (640, 480))
 
 
 def build_frames(scene: Scene, count: int, seed: int, only: list[str] | None) -> dict:
@@ -36,8 +36,9 @@ def latency_ms(detector, frames: list) -> dict:
     cv2.setNumThreads(1)
     sample = [f.rgb for f in frames[:LATENCY_FRAMES]]
     result = {}
-    for label, factor in RESOLUTIONS.items():
-        images = [cv2.resize(i, None, fx=factor, fy=factor) if factor != 1 else i for i in sample]
+    for width, height in RESOLUTIONS:
+        label = f"{width}x{height}"
+        images = [i if i.shape[:2] == (height, width) else cv2.resize(i, (width, height)) for i in sample]
         start = time.perf_counter()
         for image in images:
             detector(image)
@@ -69,11 +70,16 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--frames", type=int, default=40)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--methods", nargs="*", default=list(METHODS))
+    parser.add_argument("--methods", nargs="*", default=DEFAULT_METHODS)
     parser.add_argument("--scenarios", nargs="*")
+    parser.add_argument("--size", default="320x240")
     parser.add_argument("--out", type=Path)
     args = parser.parse_args()
-    scene = Scene()
+    marked = MARKER_METHODS & set(args.methods)
+    if marked and marked != set(args.methods):
+        parser.error("marker methods run alone, the marker changes what the others see")
+    width, height = (int(v) for v in args.size.split("x"))
+    scene = Scene(width, height, with_markers=bool(marked))
     static = build_frames(scene, args.frames, args.seed, args.scenarios)
     moving = build_sequences(scene, args.scenarios)
     results = evaluate(args.methods, static, moving, empty_frame(scene))
