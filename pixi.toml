@@ -61,6 +61,6 @@ build = "python scripts/build.py"
 launch = { cmd = "python scripts/stack.py", depends-on = ["build"] }
 rviz2 = { cmd = "python ../scripts/overlay.py rviz2 -d so101.rviz", cwd = "ros2_ws" }
 doctor = "python scripts/doctor.py"
-test = { cmd = "python -m pytest ros2_ws/src/so101_driver/test ros2_ws/src/so101_brain/test scripts/functional", env = { PYTHONPATH = "ros2_ws/src/so101_driver:ros2_ws/src/so101_brain:ros2_ws/src/so101_brain/test:scripts/functional", PYTEST_DISABLE_PLUGIN_AUTOLOAD = "1" } }
+test = { cmd = "python -m pytest ros2_ws/src/so101_driver/test ros2_ws/src/so101_brain/test ros2_ws/src/teleoperator/test/test_keyboard_layout.py ros2_ws/src/teleoperator/test/test_terminal_keys.py scripts/functional", env = { PYTHONPATH = "ros2_ws/src/so101_driver:ros2_ws/src/so101_brain:ros2_ws/src/teleoperator:ros2_ws/src/so101_brain/test:scripts/functional", PYTEST_DISABLE_PLUGIN_AUTOLOAD = "1" } }
 functional-test = { cmd = "python scripts/functional/run.py", depends-on = ["build"], env = { PYTHONPATH = "scripts" } }
 clean = { cmd = "rm -rf build install log", cwd = "ros2_ws" }  # pixi's own rm, works on Windows too
