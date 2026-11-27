@@ -35,16 +35,33 @@ jobs:
           pixi-version: v0.78.0
           frozen: true
           cache: true
-      - shell: bash
+      - run: mkdir -p artifacts/fake-real
+      - id: camera
+        continue-on-error: true
         run: |
-          mkdir -p artifacts
-          pixi run functional-test 2>&1 | tee artifacts/summary.txt
+          sudo apt-get install -y --no-install-recommends ffmpeg v4l2loopback-dkms "linux-headers-$(uname -r)"
+          sudo modprobe v4l2loopback video_nr=10 exclusive_caps=1 card_label=ci-camera
+          sudo chmod 666 /dev/video10
+          nohup ffmpeg -loglevel error -re -f lavfi -i testsrc=size=640x480:rate=15 -pix_fmt yuyv422 -f v4l2 /dev/video10 > artifacts/fake-real/ffmpeg.log 2>&1 &
+          sleep 3
+          echo "index=10" >> "$GITHUB_OUTPUT"
+      - if: steps.camera.outcome != 'success'
+        run: echo "::notice::Virtual camera skipped, v4l2loopback is not available on this runner"
+      - shell: bash
+        run: pixi run functional-test 2>&1 | tee artifacts/summary.txt
+      - if: "!cancelled()"
+        shell: bash
+        run: pixi run functional-test --backend fake-real --out artifacts/fake-real --camera-index "${{ steps.camera.outputs.index || '-1' }}" 2>&1 | tee artifacts/fake-real/summary.txt
       - if: always()
         run: |
           {
-            echo "### Functional test"
+            echo "### Functional test (simulation)"
             echo '```'
             tail -n 5 artifacts/summary.txt
+            echo '```'
+            echo "### Functional test (real backend on a fake bus)"
+            echo '```'
+            tail -n 8 artifacts/fake-real/summary.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
       - if: always()
