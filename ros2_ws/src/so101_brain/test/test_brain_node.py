@@ -1,23 +1,12 @@
 import logging
-import sys
-import types
 from types import SimpleNamespace
 
 import pytest
-from geometry_msgs.msg import Vector3Stamped
-
-try:
-    import so101_interfaces.srv  # noqa: F401
-except ImportError:
-    srv = types.ModuleType("so101_interfaces.srv")
-    srv.GoToTarget = object
-    sys.modules["so101_interfaces"] = types.ModuleType("so101_interfaces")
-    sys.modules["so101_interfaces.srv"] = srv
-
+from brain_fixtures import REACHABLE_Q, URDF_PATH
+from geometry_msgs.msg import PoseStamped, Vector3Stamped
 from so101_brain.arm_kinematics import ArmKinematics
 from so101_brain.brain_node import BrainNode
 from so101_brain.joint_interpolator import JointInterpolator
-from brain_fixtures import REACHABLE_Q, URDF_PATH
 
 
 @pytest.fixture(scope="module")
@@ -48,12 +37,15 @@ def vector(x=0.0, y=0.0, z=0.0):
     return msg
 
 
-def request(position, frame_id="base_link"):
-    req = SimpleNamespace(target_pose=SimpleNamespace(
-        header=SimpleNamespace(frame_id=frame_id),
-        pose=SimpleNamespace(position=SimpleNamespace(x=position[0], y=position[1], z=position[2])),
-    ))
-    return req, SimpleNamespace(success=None, message="")
+def target_pose(position, frame_id="base_link"):
+    msg = PoseStamped()
+    msg.header.frame_id = frame_id
+    msg.pose.position.x, msg.pose.position.y, msg.pose.position.z = (float(v) for v in position)
+    return msg
+
+
+def reachable_goal(kinematics):
+    return kinematics.position([0.1, -0.4, 0.8, 0.5, 0.0])
 
 
 def test_a_key_press_moves_the_target_one_step_along_the_axis(node, kinematics):
@@ -64,9 +56,7 @@ def test_a_key_press_moves_the_target_one_step_along_the_axis(node, kinematics):
 
 
 def test_idle_zero_vectors_do_not_cancel_a_go_to_target_move(node, kinematics):
-    goal = [float(v) for v in kinematics.position([0.1, -0.4, 0.8, 0.5, 0.0])]
-    req, res = request(goal)
-    BrainNode._cb_go_to_target(node, req, res)
+    BrainNode._cb_go_to_target(node, target_pose(reachable_goal(kinematics)))
     target = list(node._interpolator.target)
     BrainNode._cb_instruction_vector(node, vector())
     BrainNode._cb_instruction_vector(node, vector())
@@ -88,20 +78,19 @@ def test_oversized_vector_components_are_clamped(node, kinematics):
 
 
 def test_go_to_target_accepts_a_reachable_pose(node, kinematics):
-    goal = [float(v) for v in kinematics.position([0.1, -0.4, 0.8, 0.5, 0.0])]
-    req, res = request(goal)
-    assert BrainNode._cb_go_to_target(node, req, res).success is True
+    assert BrainNode._cb_go_to_target(node, target_pose(reachable_goal(kinematics))) is True
     assert node._interpolator.target != REACHABLE_Q
 
 
-def test_go_to_target_refuses_an_unreachable_pose_and_keeps_the_target(node):
-    req, res = request([5.0, 0.0, 0.0])
-    assert BrainNode._cb_go_to_target(node, req, res).success is False
+def test_go_to_target_refuses_an_unreachable_pose_and_keeps_the_target(node, caplog):
+    with caplog.at_level(logging.WARNING, logger="brain"):
+        assert BrainNode._cb_go_to_target(node, target_pose([5.0, 0.0, 0.0])) is False
     assert node._interpolator.target == REACHABLE_Q
+    assert "unreachable" in caplog.text
 
 
-def test_go_to_target_names_the_frame_it_refuses(node):
-    req, res = request([0.2, 0.0, 0.2], frame_id="map")
-    result = BrainNode._cb_go_to_target(node, req, res)
-    assert result.success is False
-    assert "frame_id" in result.message and "map" in result.message
+def test_go_to_target_names_the_frame_it_refuses(node, caplog):
+    with caplog.at_level(logging.WARNING, logger="brain"):
+        assert BrainNode._cb_go_to_target(node, target_pose([0.2, 0.0, 0.2], frame_id="map")) is False
+    assert "frame_id" in caplog.text and "map" in caplog.text
+    assert node._interpolator.target == REACHABLE_Q

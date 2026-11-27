@@ -7,7 +7,6 @@ from ament_index_python.packages import get_package_share_directory
 from geometry_msgs.msg import PoseStamped, Vector3Stamped
 from rclpy.executors import ExternalShutdownException
 from sensor_msgs.msg import JointState
-from so101_interfaces.srv import GoToTarget
 
 from so101_brain.arm_kinematics import ArmKinematics
 from so101_brain.joint_interpolator import JointInterpolator
@@ -48,7 +47,7 @@ class BrainNode(rclpy.node.Node):
         self._command_pub = self.create_publisher(JointState, "/joint_command", 10)
         self.create_subscription(JointState, "/joint_states", self._cb_joint_states, 10)
         self.create_subscription(Vector3Stamped, "/instruction_vector", self._cb_instruction_vector, 1)
-        self.create_service(GoToTarget, "/go_to_target", self._cb_go_to_target)
+        self.create_subscription(PoseStamped, "/go_to_target", self._cb_go_to_target, 1)
         self.create_timer(CONTROL_PERIOD_S, self._control_loop)
 
         self.get_logger().info("Brain node ready.")
@@ -104,26 +103,25 @@ class BrainNode(rclpy.node.Node):
         if self._kinematics.error(q_sol, target) < REACH_TOLERANCE_M:
             self._interpolator.target = q_sol
 
-    def _cb_go_to_target(self, request, response):
-        frame = request.target_pose.header.frame_id
+    def _cb_go_to_target(self, msg: PoseStamped) -> bool:
+        frame = msg.header.frame_id
         if frame not in ("", BASE_FRAME):
-            response.success = False
-            response.message = f"target_pose.header.frame_id must be {BASE_FRAME}, got {frame}"
-            return response
-        p = request.target_pose.pose.position
+            self.get_logger().warn(f"go_to_target refused: header.frame_id must be {BASE_FRAME}, got {frame}")
+            return False
+        p = msg.pose.position
         target = [p.x, p.y, p.z]
         try:
             q_sol = self._kinematics.solve(target, self._current_q)
         except ValueError as error:
-            response.success = False
-            response.message = f"IK failed: {error}"
-            return response
-        error_m = self._kinematics.error(q_sol, target)
-        response.success = error_m < REACH_TOLERANCE_M
-        response.message = f"IK solved (error: {error_m * 100.0:.2f} cm)"
-        if response.success:
-            self._interpolator.target = q_sol
-        return response
+            self.get_logger().warn(f"go_to_target refused: IK failed: {error}")
+            return False
+        error_cm = self._kinematics.error(q_sol, target) * 100.0
+        if error_cm >= REACH_TOLERANCE_M * 100.0:
+            self.get_logger().warn(f"go_to_target refused: target unreachable (IK error {error_cm:.2f} cm)")
+            return False
+        self._interpolator.target = q_sol
+        self.get_logger().info(f"go_to_target accepted (IK error {error_cm:.2f} cm)")
+        return True
 
     def _control_loop(self):
         if not self._interpolator.ready:
