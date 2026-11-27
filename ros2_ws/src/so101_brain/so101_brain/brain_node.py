@@ -13,6 +13,8 @@ from ikpy.chain import Chain
 from rclpy.executors import ExternalShutdownException
 from scipy.spatial.transform import Rotation
 from sensor_msgs.msg import JointState
+from std_msgs.msg import Int32
+
 try:
     from so101_interfaces.srv import GoToTarget
     HAS_GOTO_SRV = True
@@ -44,14 +46,21 @@ class BrainNode(rclpy.node.Node):
             active_links_mask=[False, True, True, True, True, True, False],
         )
 
-        # 2. État des articulations et variables d'interpolation
+        # 2. Paramètres dynamiques (modifiables à chaud via ros2 param set)
+        self.declare_parameter("max_speed_rad_s", 2.0)  # Vitesse max moteurs (rad/s)
+        self.declare_parameter("step_size_m", 0.002)    # 2 mm par tick -> 4 cm/s normal, 12 cm/s boost à 20 Hz
+
+        # 3. État des articulations et variables d'interpolation
         self._current_q = [0.0] * 5
         self._target_q = [0.0] * 5
         self._commanded_q = [0.0] * 5
         self._initialized_q = False
-        self._step_size_m = 0.01  # 1 cm par impulsion clavier (-1, 0, 1)
 
-        # 3. Publishers & Subscribers
+        # État de la pince (0-100 %)
+        self._target_gripper_pct = 0.0
+        self._last_sent_gripper_pct = None
+
+        # 4. Publishers & Subscribers (QoS=1 sur le teleop pour éviter la file d'attente)
         self._tcp_pose_pub = self.create_publisher(PoseStamped, "/end_effector_pose", 10)
         self._joint_cmd_pub = self.create_publisher(JointState, "/joint_command", 10)
 
@@ -61,12 +70,15 @@ class BrainNode(rclpy.node.Node):
         self._instruction_sub = self.create_subscription(
             Vector3Stamped, "/instruction_vector", self._cb_instruction_vector, 1
         )
+        self._grab_sub = self.create_subscription(
+            Int32, "/instruction_grab", self._cb_instruction_grab, 1
+        )
 
-        # 4. Service de déplacement absolu
+        # 5. Service de déplacement absolu
         if HAS_GOTO_SRV:
             self._goto_srv = self.create_service(GoToTarget, "/go_to_target", self._cb_go_to_target)
 
-        # 5. Timer d'interpolation douce à 50 Hz (20 ms)
+        # 6. Timer d'interpolation douce à 50 Hz (20 ms)
         self._interp_timer = self.create_timer(0.02, self._control_loop)
 
         self.get_logger().info("Brain node ready.")
@@ -133,6 +145,10 @@ class BrainNode(rclpy.node.Node):
             msg.position = list(q)
         self._joint_cmd_pub.publish(msg)
 
+    def _cb_instruction_grab(self, msg: Int32):
+        """Met à jour l'ouverture cible de la pince (0 à 100 %)."""
+        self._target_gripper_pct = float(max(0, min(100, msg.data)))
+
     def _cb_instruction_vector(self, msg: Vector3Stamped):
         """Déplace la cible TCP selon le vecteur envoyé par teleoperator_node."""
         if not self._initialized_q:
@@ -140,17 +156,17 @@ class BrainNode(rclpy.node.Node):
 
         vx, vy, vz = msg.vector.x, msg.vector.y, msg.vector.z
 
-        # Au relâchement des touches (vecteur nul), on arrête immédiatement la poursuite
+        # Arrêt immédiat au relâchement des touches
         if vx == 0.0 and vy == 0.0 and vz == 0.0:
             self._target_q = list(self._commanded_q)
             return
 
-        # On part de la position actuellement commandée pour éviter toute dérive accumulée
+        step_m = float(self.get_parameter("step_size_m").value)
         current_tcp = self._forward_kinematics(self._commanded_q)[:3, 3]
         new_target = [
-            float(current_tcp[0] + vx * self._step_size_m),
-            float(current_tcp[1] + vy * self._step_size_m),
-            float(current_tcp[2] + vz * self._step_size_m),
+            float(current_tcp[0] + vx * step_m),
+            float(current_tcp[1] + vy * step_m),
+            float(current_tcp[2] + vz * step_m),
         ]
 
         try:
@@ -181,22 +197,36 @@ class BrainNode(rclpy.node.Node):
         return response
 
     def _control_loop(self):
-        """Interpole progressivement _commanded_q vers _target_q à 50 Hz."""
+        """Interpole progressivement _commanded_q vers _target_q à 50 Hz et pilote la pince."""
         if not self._initialized_q:
             return
 
-        max_step = 0.015  # 0.5 mm par tick -> 2.0 * 0.0005 * 20 Hz = 2 cm/s
-        moved = False
+        speed = float(self.get_parameter("max_speed_rad_s").value)
+        max_step = speed * 0.02
 
-        for i in range(5):
-            diff = self._target_q[i] - self._commanded_q[i]
-            if abs(diff) > 1e-4:
-                step = max(-max_step, min(max_step, diff))
-                self._commanded_q[i] += step
-                moved = True
+        diffs = [self._target_q[i] - self._commanded_q[i] for i in range(5)]
+        max_diff = max(abs(d) for d in diffs)
+        arm_moved = False
 
-        if moved:
-            self._send_joint_command(self._commanded_q)
+        if max_diff > 1e-4:
+            scale = min(1.0, max_step / max_diff)
+            for i in range(5):
+                self._commanded_q[i] += diffs[i] * scale
+            arm_moved = True
+
+        gripper_changed = (
+            self._last_sent_gripper_pct is None
+            or abs(self._target_gripper_pct - self._last_sent_gripper_pct) > 0.1
+        )
+
+        # On ne publie sur /joint_command que si le bras bouge OU si la valeur de la pince a changé
+        if arm_moved or gripper_changed:
+            self._send_joint_command(
+                self._commanded_q,
+                gripper_pct=self._target_gripper_pct if gripper_changed else None,
+            )
+            if gripper_changed:
+                self._last_sent_gripper_pct = self._target_gripper_pct
 
 
 def main(args=None):
