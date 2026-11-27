@@ -1,49 +1,39 @@
 #!/usr/bin/env python3
-"""perception_node.py — golden ball detection and 3D registration.
-
-TODO:
-  - Subscribe to /external_cam/image_raw and /external_cam/camera_info
-  - Publish /object_position (5-10 Hz)
-  - Get the cube and drop box pixels (u, v) from so101_perception.detection
-  - Project pixel -> 3D via K^{-1} and the camera->world TF
-  - Intersect with the z=0 plane (table) to estimate the depth
-  - Get cam_K / cam_T from the driver (params or CameraInfo)
-"""
-import threading
-
-import cv2
 import rclpy
 import rclpy.node
-from cv_bridge import CvBridge
-from geometry_msgs.msg import PoseStamped
-from rcl_interfaces.srv import GetParameters
+from rclpy.executors import ExternalShutdownException
 from sensor_msgs.msg import CameraInfo, Image
+
+from so101_perception.camera_pose_source import make_camera_pose_source
+from so101_perception.object_publisher import ObjectPublisher
+from so101_perception.projection import CUBE_CENTER_HEIGHT, DROP_BOX_BLOB_HEIGHT
 
 
 class PerceptionNode(rclpy.node.Node):
-    """Detects the golden ball and publishes its 3D position."""
-
     def __init__(self):
-        raise NotImplementedError("TO DO")
-
-    def _cb_camera_info(self, msg):
-        raise NotImplementedError("TO DO")
-
-    def _cb_image(self, msg):
-        raise NotImplementedError("TO DO")
-
-    def _detect_object(self, cv_image):
-        raise NotImplementedError("TO DO")
-
-    def _project_to_3d(self, u, v):
-        raise NotImplementedError("TO DO")
-
-    def _publish_result(self):
-        raise NotImplementedError("TO DO")
-
-    def _fetch_cam_params(self):
-        raise NotImplementedError("TO DO")
+        super().__init__("perception_node")
+        pose_file: str = self.declare_parameter("camera_pose_file", "").value
+        cube_height: float = self.declare_parameter("cube_height", CUBE_CENTER_HEIGHT).value
+        box_height: float = self.declare_parameter("box_height", DROP_BOX_BLOB_HEIGHT).value
+        publisher = ObjectPublisher(self, make_camera_pose_source(self, pose_file), cube_height, box_height)
+        self.create_subscription(CameraInfo, "/external_cam/camera_info", publisher.on_camera_info, 1)
+        self.create_subscription(Image, "/external_cam/image_raw", publisher.on_image, 1)
+        source = pose_file or "the TF world -> external_cam_optical_frame"
+        self.get_logger().info(f"Perception node ready, camera pose from {source}.")
 
 
-def main():
-    raise NotImplementedError("TO DO")
+def main(args=None):
+    rclpy.init(args=args)
+    node = PerceptionNode()
+    try:
+        rclpy.spin(node)
+    except (KeyboardInterrupt, ExternalShutdownException):
+        pass
+    finally:
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()

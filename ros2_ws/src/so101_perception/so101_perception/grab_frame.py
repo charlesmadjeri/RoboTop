@@ -3,19 +3,13 @@ import sys
 from pathlib import Path
 
 import cv2
-import numpy as np
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 
+from so101_perception.image_message import rgb_from_image
+
 TOPIC = "/external_cam/image_raw"
-
-
-def rgb_from_image(message: Image) -> np.ndarray:
-    if message.encoding != "rgb8":
-        raise ValueError(f"expected an rgb8 image, got {message.encoding}")
-    rows = np.frombuffer(bytes(message.data), np.uint8).reshape(message.height, message.step)
-    return rows[:, : 3 * message.width].reshape(message.height, message.width, 3)
 
 
 def main(argv=None):

@@ -14,6 +14,7 @@ it, RViz shows the arm "in pieces". The first version of the driver publishing i
 | `/joint_states` | published, 30 Hz | `sensor_msgs/JointState` | 6 joints in radians, in the order of `JOINT_NAMES` |
 | `/joint_command` | subscribed | `sensor_msgs/JointState` | position targets by joint name, arm joints in radians, gripper in 0-100 % |
 | `/external_cam/image_raw`, `/external_cam/camera_info` | published, 10 Hz | `Image`, `CameraInfo` | sim: provided by `_start_sim_camera`. Real arm: the USB camera read through LeRobot `OpenCVCamera`, published by `frame_publisher.py`, rgb8 |
+| `/tf_static` | published once, sim only | `tf2_msgs/TFMessage` | `world` to `external_cam_optical_frame`, the true pose of the simulated camera (`sim_camera_pose.py`). On the real arm the pose comes from `calibrate_camera` instead, see `docs/camera-calibration.md` |
 
 ## How it works
 

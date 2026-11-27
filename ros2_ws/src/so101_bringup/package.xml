@@ -10,6 +10,7 @@
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>so101_driver</exec_depend>
   <exec_depend>so101_description</exec_depend>
+  <exec_depend>so101_perception</exec_depend>
   <exec_depend>so101_brain</exec_depend>
 
   <export>

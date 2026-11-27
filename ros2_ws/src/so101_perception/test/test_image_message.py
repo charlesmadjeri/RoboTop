@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from so101_perception.grab_frame import rgb_from_image
+from so101_perception.image_message import rgb_from_image
 
 
 def message(pixels, padding=0, encoding="rgb8"):

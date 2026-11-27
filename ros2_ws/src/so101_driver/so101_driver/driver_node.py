@@ -20,16 +20,19 @@ from lerobot.robots.so_follower import SO101Follower, SO101FollowerConfig
 from rclpy.executors import ExternalShutdownException
 from sensor_msgs.msg import JointState
 from so101_sim import SO101Sim
+from tf2_ros import StaticTransformBroadcaster
 
 from so101_driver.camera_info import build_camera_info, pinhole_intrinsics
 from so101_driver.frame_publisher import FramePublisher
 from so101_driver.joint_codec import JOINT_NAMES, command_to_action, observation_to_positions
+from so101_driver.sim_camera_pose import camera_transform
 from so101_driver.usb_camera import open_usb_camera
 
 CONTROL_HZ = 50.0
 JOINT_STATE_HZ = 30.0
 CAMERA_HZ = 10.0
 CAMERA_FRAME = "external_cam_optical_frame"
+ROBOT_FRAME = "world"
 
 
 def _calibration_file() -> Path:
@@ -125,6 +128,11 @@ class DriverNode(rclpy.node.Node):
         # shortcut: renders while your timers step the physics; fine for a camera image.
         self._camera_publisher = FramePublisher(self, self._robot.render_camera, camera_info, CAMERA_HZ)
         self._camera_publisher.start()
+        self._camera_pose_broadcaster = StaticTransformBroadcaster(self)
+        stamp = self.get_clock().now().to_msg()
+        self._camera_pose_broadcaster.sendTransform(
+            camera_transform(self._robot.get_camera_extrinsics(), ROBOT_FRAME, CAMERA_FRAME, stamp)
+        )
 
     def _start_usb_camera(self):
         """Publishes the USB camera of the real arm on the same topics as the simulated one."""
