@@ -31,6 +31,7 @@ tqdm = "*"
 deepdiff = "*"
 draccus = "*"
 setuptools = "<80"
+pytest = ">=9.2.0,<10"
 
 [pypi-dependencies]
 rustypot = ">=1.13.1,<2"  # Feetech bus driver since LeRobot v0.7
@@ -59,4 +60,5 @@ build = "python scripts/build.py"
 launch = { cmd = "python scripts/stack.py", depends-on = ["build"] }
 rviz2 = { cmd = "python ../scripts/overlay.py rviz2 -d so101.rviz", cwd = "ros2_ws" }
 doctor = "python scripts/doctor.py"
+test = { cmd = "python -m pytest test", cwd = "ros2_ws/src/so101_driver", env = { PYTHONPATH = ".", PYTEST_DISABLE_PLUGIN_AUTOLOAD = "1" } }
 clean = { cmd = "rm -rf build install log", cwd = "ros2_ws" }  # pixi's own rm, works on Windows too
