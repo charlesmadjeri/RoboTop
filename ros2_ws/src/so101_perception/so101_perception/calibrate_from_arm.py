@@ -121,6 +121,7 @@ def run_on_robot(args, poses: np.ndarray) -> None:
         first_move = np.abs(arm.joint_positions() - poses[0]).max()
         print(f"the first move goes from the current pose to pose 1: largest joint travel {first_move:.2f} rad")
         input("The arm is going to move. Clear the workspace, keep the power switch in reach and press Enter: ")
+        arm.command(arm.joint_positions())
         if args.grip:
             set_gripper(arm, args.grip[0])
             input("Put the cube between the open jaws and press Enter: ")

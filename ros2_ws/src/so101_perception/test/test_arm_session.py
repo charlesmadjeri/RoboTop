@@ -3,11 +3,13 @@ import pytest
 
 from so101_perception.arm_session import (
     ARRIVAL_TIMEOUT_S,
+    ARRIVAL_TOLERANCE_RAD,
     COMMAND_RATE_HZ,
     FRAMES_PER_POSE,
     collect_samples,
     cube_pixel,
     travel_to,
+    wait_for_arrival,
 )
 
 POSES = np.array([[0.1, 0.0, 0.0, 0.0, 0.0], [0.5, 0.2, 0.0, 0.0, 0.0], [0.5, 0.2, 0.4, 0.3, 0.0]])
@@ -68,8 +70,8 @@ def test_a_move_without_joint_states_stops_with_a_message_and_sends_nothing():
 
 def test_an_arm_that_never_arrives_is_reported_instead_of_photographed():
     rig = FakeRig(start=np.zeros(5), moves=False)
-    with pytest.raises(RuntimeError, match="did not reach"):
-        collect_samples(rig, rig, lambda frame: (1.0, 1.0), POSES, SPEED, report=lambda line: None)
+    with pytest.raises(RuntimeError, match="shoulder_pan stopped 0.50 rad"):
+        collect_samples(rig, rig, lambda frame: (1.0, 1.0), POSES[1:], SPEED, report=lambda line: None)
     assert rig.waited >= ARRIVAL_TIMEOUT_S
     assert rig.shown == []
 
@@ -105,3 +107,30 @@ def test_the_pixel_of_a_pose_is_the_median_of_its_frames_and_ignores_one_wrong_f
 def test_one_detection_out_of_the_frames_is_not_enough():
     answers = iter([(100.0, 50.0)] + [None] * (FRAMES_PER_POSE - 1))
     assert cube_pixel(FakeRig(start=POSES[0]), lambda frame: next(answers)) is None
+
+
+def test_a_joint_that_settles_short_of_the_target_by_gravity_is_accepted():
+    sag = ARRIVAL_TOLERANCE_RAD * 0.9
+    rig = FakeRig(start=np.zeros(5), moves=False)
+    rig.joints = np.array([0.5 - sag, 0.0, 0.0, 0.0, 0.0])
+    wait_for_arrival(rig, POSES[1] * [1, 0, 0, 0, 0])
+    assert rig.waited < ARRIVAL_TIMEOUT_S
+
+
+def test_an_arm_still_moving_is_not_accepted_as_arrived():
+    rig = FakeRig(start=np.zeros(5), moves=False)
+    original = rig.wait
+
+    def drifting_wait(seconds):
+        original(seconds)
+        rig.joints = rig.joints + np.array([0.05, 0, 0, 0, 0])
+
+    rig.wait = drifting_wait
+    with pytest.raises(RuntimeError, match="stopped"):
+        wait_for_arrival(rig, np.array([10.0, 0, 0, 0, 0]))
+
+
+def test_the_error_names_the_joint_that_is_furthest_from_its_target():
+    rig = FakeRig(start=[0.0, 0.0, 0.3, 0.0, 0.0], moves=False)
+    with pytest.raises(RuntimeError, match="elbow_flex stopped 0.30 rad"):
+        wait_for_arrival(rig, np.zeros(5))

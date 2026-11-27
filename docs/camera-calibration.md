@@ -90,7 +90,7 @@ takes 3 frames and keeps the median pixel of the cube. It then solves, checks on
 4. `calibrate_from_arm --fov-deg 75 --output camera_pose.json`. Without `--fov-deg` it uses the K of
    `/external_cam/camera_info`, and 75 degrees if there is none. It prints the largest travel of the first move, and
    waits for Enter: clear the workspace and keep the power switch in reach. The joints move at most 0.4 rad/s
-   (`--speed`, at most 1.0), in steps of 20 Hz. If a pose is not reached in 6 s the command stops with a message.
+   (`--speed`, at most 1.0), in steps of 20 Hz. The driver must run with `--torque`, or the arm ignores the commands. A pose counts as reached when the joints stop within 0.1 rad of it, so a little sag under gravity is accepted. Otherwise, after 6 s, the command stops and names the joint and its gap. The arm holds its current pose before the jaws move.
 5. Read the report: the residual of each pose in pixels, the poses dropped as wrong detections or skipped because the
    cube was not found, the median and worst held-out error, and the offset of the cube center from the gripper frame.
    A pose dropped or skipped is not a failure. Below 9 kept poses the held-out check is impossible and nothing is
