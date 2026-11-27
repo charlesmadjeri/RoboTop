@@ -71,6 +71,10 @@ On the real arm, the USB camera is published on `/external_cam/image_raw` at 10 
   `MJPG` at a size (the UGREEN CM678 at 1280x720) stops with `failed to set fps=30` without it. List the formats with
   `v4l2-ctl -d /dev/video0 --list-formats-ext`.
 
+`driver.launch.py` and `so101.launch.py` forward `camera_index`, `camera_width`, `camera_height`, `camera_fourcc` and
+`camera_fov_deg`. `pixi run launch --backend real --port <port> --profile camx` sets them all from
+`profiles/camx.json` (CM678: 1280x720, `MJPG`, 75 degrees).
+
 A USB hiccup skips one frame and does not stop the stream.
 
 ## Check it
