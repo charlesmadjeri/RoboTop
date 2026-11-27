@@ -22,3 +22,33 @@ jobs:
           cache: true
       - run: pixi run build
       - run: pixi run test
+
+  functional:
+    needs: unit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb imagemagick libegl1 libegl-mesa0 libgl1-mesa-dri libglx-mesa0
+      - uses: prefix-dev/setup-pixi@v0.11.3
+        with:
+          pixi-version: v0.78.0
+          frozen: true
+          cache: true
+      - shell: bash
+        run: |
+          mkdir -p artifacts
+          pixi run functional-test 2>&1 | tee artifacts/summary.txt
+      - if: always()
+        run: |
+          {
+            echo "### Functional test"
+            echo '```'
+            tail -n 5 artifacts/summary.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: functional-test
+          path: artifacts

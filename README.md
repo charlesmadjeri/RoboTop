@@ -57,7 +57,8 @@ In a second terminal: `pixi run rviz2`.
 | `pixi shell` | Shell with ROS 2 and the workspace sourced |
 | `pixi run ros2 <args>` | Any ROS 2 command |
 | `pixi run doctor` | Check the setup, with the fix for each problem |
-| `pixi run test` | Unit tests of `so101_driver` |
+| `pixi run test` | Unit tests (`so101_driver` and the functional test helpers) |
+| `pixi run functional-test` | Start the simulated stack and RViz headless, move the arm, save screenshots in `artifacts/` |
 | `pixi run clean` | Delete `ros2_ws/build install log` |
 | `pixi add <pkg>`, `pixi add --pypi <pkg>` | Add a dependency, commit `pixi.toml` and `pixi.lock` |
 
@@ -89,6 +90,8 @@ pixi run launch --backend real --port <port> --camera-index <n>   # USB camera, 
 ## CI
 
 `.github/workflows/ci.yml` runs on every pull request and on pushes to `dev`. The `unit` job installs the pixi environment as locked in `pixi.lock`, runs `pixi run build`, then `pixi run test`. Run the same two commands locally before you push.
+
+The `functional` job runs `pixi run functional-test` under Xvfb with software rendering (`MUJOCO_GL=egl`). It checks `/joint_states` and `/external_cam/image_raw`, takes a screenshot of RViz and a sim camera frame, commands `shoulder_pan` to 0.5 rad, takes a second pair, and fails when the joint did not move or an image did not change. The screenshots, frames and logs are the `functional-test` artifact of the run. Locally it needs `Xvfb` and ImageMagick (`import`); `--target <rad>` changes the move.
 
 ## Troubleshooting
 
