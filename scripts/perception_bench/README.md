@@ -18,6 +18,13 @@ Tests (the rendering ones skip when no offscreen OpenGL is available):
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest perception_bench/tests
 ```
 
+## Methods
+
+- `hsv_fixed`: the fixed HSV ranges of `so101_perception.detection`, the baseline.
+- `hsv_normalized`: gray-world white balance and CLAHE on V, then the same HSV ranges.
+- `lab_geometry`: Lab chroma distance to a reference color at growing radii, kept only if the blob is compact and roughly square.
+- `background_diff`: change against the empty-scene frame, kept only where the pixel is red. The box is static and part of that frame, so its position comes from the HSV box detector.
+
 ## How it is scored
 
 - Ground truth comes from MuJoCo segmentation rendering: the visible mask and its centroid, and the full size with the arm and decoys hidden.
