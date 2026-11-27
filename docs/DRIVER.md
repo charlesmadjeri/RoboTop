@@ -67,6 +67,9 @@ On the real arm, the USB camera is published on `/external_cam/image_raw` at 10 
 - `camera_width`: image width, default `640`.
 - `camera_height`: image height, default `480`.
 - `camera_fov_deg`: horizontal field of view used to estimate the intrinsics, default `70`.
+- `camera_fourcc`: pixel format asked of the camera, default empty (automatic). A camera that only reaches 30 fps in
+  `MJPG` at a size (the UGREEN CM678 at 1280x720) stops with `failed to set fps=30` without it. List the formats with
+  `v4l2-ctl -d /dev/video0 --list-formats-ext`.
 
 A USB hiccup skips one frame and does not stop the stream.
 

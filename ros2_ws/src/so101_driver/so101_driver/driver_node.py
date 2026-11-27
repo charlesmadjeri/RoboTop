@@ -140,11 +140,12 @@ class DriverNode(rclpy.node.Node):
         width: int = self.declare_parameter("camera_width", 640).value
         height: int = self.declare_parameter("camera_height", 480).value
         fov_deg: float = self.declare_parameter("camera_fov_deg", 70.0).value
+        fourcc: str = self.declare_parameter("camera_fourcc", "").value
         if index < 0:
             self.get_logger().info("USB camera disabled (camera_index < 0)")
             return
         try:
-            camera = open_usb_camera(index, width, height)
+            camera = open_usb_camera(index, width, height, fourcc)
         except Exception:
             self._robot.disconnect()
             raise
