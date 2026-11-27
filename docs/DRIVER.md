@@ -14,6 +14,7 @@ it, RViz shows the arm "in pieces". The first version of the driver publishing i
 | `/joint_states` | published, 30 Hz | `sensor_msgs/JointState` | 6 joints in radians, in the order of `JOINT_NAMES` |
 | `/joint_command` | subscribed | `sensor_msgs/JointState` | position targets by joint name, arm joints in radians, gripper in 0-100 % |
 | `/external_cam/image_raw`, `/external_cam/camera_info` | published, 10 Hz | `Image`, `CameraInfo` | sim: provided by `_start_sim_camera`. Real arm: the USB camera read through LeRobot `OpenCVCamera`, published by `frame_publisher.py`, rgb8 |
+| `/tf_static` | published once, sim only | `tf2_msgs/TFMessage` | `world` to `external_cam_optical_frame`, the true pose of the simulated camera (`sim_camera_pose.py`). On the real arm the pose comes from `calibrate_camera` instead, see `docs/camera-calibration.md` |
 
 ## How it works
 
@@ -63,9 +64,17 @@ On the real arm, the USB camera is published on `/external_cam/image_raw` at 10 
 
 - `camera_index`: USB camera index of the real arm, default `0`. `-1` disables the camera. Real arm only.
   Get the index from `lerobot-find-cameras opencv`.
+- `enable_torque`: real arm only, default `false` (the arm is free by hand and ignores commands).
 - `camera_width`: image width, default `640`.
 - `camera_height`: image height, default `480`.
 - `camera_fov_deg`: horizontal field of view used to estimate the intrinsics, default `70`.
+- `camera_fourcc`: pixel format asked of the camera, default empty (automatic). A camera that only reaches 30 fps in
+  `MJPG` at a size (the UGREEN CM678 at 1280x720) stops with `failed to set fps=30` without it. List the formats with
+  `v4l2-ctl -d /dev/video0 --list-formats-ext`.
+
+`driver.launch.py` and `so101.launch.py` forward `camera_index`, `camera_width`, `camera_height`, `camera_fourcc` and
+`camera_fov_deg`. `pixi run launch --backend real --port <port> --profile camx` sets them all from
+`profiles/camx.json` (CM678: 1280x720, `MJPG`, 75 degrees).
 
 A USB hiccup skips one frame and does not stop the stream.
 
@@ -101,8 +110,10 @@ The real backend is tested without the arm: `test/fake_bus.py` replaces rustypot
 
 ## Known limits
 
-- Real arm: the torque is disabled in `_connect_arm` on purpose, so commands move nothing until you
-  remove that line. The real-arm path was not run when this driver was written.
+- Real arm: the torque is disabled by default, on purpose, so commands move nothing and the arm is free by hand.
+  `enable_torque:=true` (`--torque` of `pixi run launch`) holds the present position, then lets the arm follow
+  `/joint_command`. Connecting the motors briefly enables the torque with their last goal, so keep the arm clear of
+  obstacles at start.
 - Commands are not clipped to the joint limits of the URDF by the driver.
 - An exception raised by the backend read (for example a USB hiccup on the real arm) is not caught and
   ends the node. Whether to retry or to stop is still to be decided.

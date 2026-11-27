@@ -57,7 +57,7 @@ def test_camera_is_opened_with_the_requested_index_and_size(monkeypatch):
     opened = []
     monkeypatch.setattr(driver_node, "open_usb_camera", lambda *args: opened.append(args) or FakeCamera())
     DriverNode._start_usb_camera(driver(camera_index=3, camera_width=320, camera_height=240))
-    assert opened == [(3, 320, 240)]
+    assert opened == [(3, 320, 240, "")]
 
 
 def test_frames_come_from_the_camera_and_it_is_released_on_stop(monkeypatch, publishers):
@@ -97,3 +97,36 @@ def test_usb_camera_is_configured_from_the_index_and_connected(monkeypatch):
     config = seen["config"]
     assert (config.index_or_path, config.width, config.height) == (2, 640, 480)
     assert seen["connected"]
+
+
+class FourccCamera:
+    configs = []
+
+    def __init__(self, config):
+        self.configs.append(config)
+
+    def connect(self):
+        self.connected = True
+
+
+def open_with_format(monkeypatch, *arguments):
+    FourccCamera.configs = []
+    monkeypatch.setattr(usb_camera, "OpenCVCamera", FourccCamera)
+    camera = usb_camera.open_usb_camera(*arguments)
+    return camera, FourccCamera.configs[0]
+
+
+def test_pixel_format_is_passed_to_the_camera(monkeypatch):
+    _, config = open_with_format(monkeypatch, 0, 1280, 720, "MJPG")
+    assert config.fourcc == "MJPG"
+    assert (config.width, config.height, config.fps) == (1280, 720, usb_camera.CAMERA_FPS)
+
+
+def test_no_pixel_format_keeps_the_automatic_detection(monkeypatch):
+    _, config = open_with_format(monkeypatch, 0, 640, 480)
+    assert config.fourcc is None
+
+
+def test_camera_is_connected_before_it_is_returned(monkeypatch):
+    camera, _ = open_with_format(monkeypatch, 0, 640, 480, "")
+    assert camera.connected

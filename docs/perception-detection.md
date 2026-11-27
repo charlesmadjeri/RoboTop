@@ -137,6 +137,26 @@ nothing. The benchmark says its next step is `hsv_normalized`, which fixes the l
 setup cost. `yolo_vulkan` is the candidate if red decoys or a changing workspace are expected, after it is
 trained on real frames. The box range needs a real fixture with a brown object in view.
 
+### Applied in the package
+
+The benchmark of the detection methods keeps HSV, with the white balance and contrast normalization of `hsv_normalized`
+(100% recall under every lighting scenario). YOLO as trained found the cube in 0 of 20 real frames. The node and the
+calibration commands call `so101_perception/detector.py`:
+
+1. Shrink the frame to 640 px wide (`normalization.shrink_to_width`), so a 1280x720 frame costs about 10 ms, under the 100 ms of a 10 Hz loop.
+2. Run `find_cube` and `find_drop_box` from `detection.py` on the plain frame.
+3. For a target not found, balance the white (median of each channel), equalize the V channel (CLAHE, clip 2.0, 4x4 tiles) and look again.
+4. Scale the pixels back to the full frame.
+
+The plain frame comes first because the equalization moves the centroid. On a well lit real frame of the CM678 (cube and
+wooden bowl, `test/data/real_scene.png`) the plain cube blob is 17316 px2 at (404, 477), the equalized one 6196 px2 at
+(414, 445), 33 px higher: the contrast step splits the cube. The sim scene dimmed to 20% is only found after the
+normalization. `detection.py` is unchanged, the benchmark imports it.
+
+The box ranges are those of `detection.py`. A dark power adapter reads the hue and saturation of the wooden bowl, so it
+is taken for the drop box (`test_detector.py`, expected failure on `real_cube.png`): keep it out of the view. The bowl is
+a round object seen from the side, its blob centroid is not the base of the box on the table.
+
 ## What is not measured
 
 - **The real camera beyond one scene.** Lighting changes, decoys and the arm in front of the cube were only run on
@@ -150,7 +170,7 @@ trained on real frames. The box range needs a real fixture with a brown object i
 
 - Anything else red or brown in view (a hand, a wooden table) is picked up. Keep the workspace clear, or retune the ranges.
 - The returned pixel is the centroid of the visible blob, not the cube center on the table; the 3D step has to account for that.
-- The ranges are tuned on the simulation. A frame from the real camera still has to be added to the fixtures and the ranges checked against it.
+- The ranges are checked on two real frames (`test/data/real_cube.png`, `real_scene.png`) and the simulated scenes. The red cap on the robot base passes the cube mask: it is small, and loses to the cube unless the cube is hidden.
 
 ## Tests
 
@@ -159,6 +179,8 @@ The expected pixels come from projecting `get_object_position()` and `get_drop_b
 `get_camera_intrinsics()` and `get_camera_extrinsics()`, which is allowed in tests and forbidden in the pipeline.
 
 Scenes: cube and box (two poses), cube only, box only, empty, dimmed light.
+
+`test/test_detector.py` runs the same scenes through `detect`, the real frames at 640x360 and at full size, the plain frame first and the fallback on a dark scene, the scale back, the time budget and a blue cast. `test/test_normalization.py` checks the shrink, the white balance and the equalization.
 
 Regenerate the images with `SO101Sim(seed=...)`: `connect()`, apply the scene edit (move the cube with its free joint,
 move the box with `model.body_pos`, scale `model.light_diffuse`), then `render_camera()` and save as PNG.

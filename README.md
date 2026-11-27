@@ -53,6 +53,7 @@ In a second terminal: `pixi run rviz2`.
 | `pixi run build` | Build `ros2_ws` |
 | `pixi run launch --backend sim` | Build and launch the stack in simulation (default backend) |
 | `pixi run launch --backend real --port <port>` | Same stack on the real arm |
+| `pixi run launch --backend real --port <port> --profile camx` | Real arm with the camera settings of `profiles/camx.json` |
 | `pixi run rviz2` | RViz with `ros2_ws/so101.rviz` |
 | `pixi shell` | Shell with ROS 2 and the workspace sourced |
 | `pixi run ros2 <args>` | Any ROS 2 command |
@@ -82,6 +83,16 @@ pixi run launch --backend real --port <port> --camera-index <n>   # USB camera, 
 ```
 
 `--camera-index <n>` picks the USB camera of the arm (`-1` disables it). List the indexes with `lerobot-find-cameras`.
+
+`--profile <name>` loads the camera settings of `profiles/<name>.json`: `camera_index`, `camera_width`, `camera_height`, `camera_fourcc`, `camera_fov_deg` and `camera_pose_file`. `--camera-index` still wins over the profile. `profiles/camx.json` is the UGREEN CM678 at 1280x720 in `MJPG` with a 75 degree field of view:
+
+```bash
+pixi run launch --backend real --port <port> --profile camx
+```
+
+The arm is free by hand and ignores commands by default. Add `--torque` when the arm has to move, for example for `calibrate_from_arm`: it holds the present position, then follows `/joint_command`. Keep the power switch in reach.
+
+Copy it to `profiles/<name>.json` for another camera. `profiles/camx.json` loads `camera_pose.json` from the repo root (a relative `camera_pose_file` resolves from there, the file is gitignored): calibrate first, or the stack stops with a missing pose file. A new camera without a calibration leaves `camera_pose_file` out.
 
 - **Linux**: `sudo usermod -aG dialout $USER`, then log out and back in. Use the port's stable name from `ls -l /dev/serial/by-id/`: `/dev/ttyACM0` can change when you plug the arms in another order. Another way to find the port, watch it appear when you plug the USB cable:
   `sudo udevadm monitor --subsystem-match=tty --property | grep --line-buffered -E "(DEVNAME=|ACTION=)"`

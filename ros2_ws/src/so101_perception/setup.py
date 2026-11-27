@@ -16,6 +16,9 @@ setup(
     entry_points={
         "console_scripts": [
             "perception = so101_perception.perception_node:main",
+            "calibrate_camera = so101_perception.calibrate_camera:main",
+            "grab_frame = so101_perception.grab_frame:main",
+            "calibrate_from_arm = so101_perception.calibrate_from_arm:main",
         ],
     },
 )

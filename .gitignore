@@ -37,3 +37,6 @@ Thumbs.db
 *.mcap
 rosbag2_*/
 artifacts/
+
+# Camera calibration of the real arm
+camera_pose.json

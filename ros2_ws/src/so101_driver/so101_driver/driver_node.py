@@ -20,16 +20,20 @@ from lerobot.robots.so_follower import SO101Follower, SO101FollowerConfig
 from rclpy.executors import ExternalShutdownException
 from sensor_msgs.msg import JointState
 from so101_sim import SO101Sim
+from tf2_ros import StaticTransformBroadcaster
 
 from so101_driver.camera_info import build_camera_info, pinhole_intrinsics
 from so101_driver.frame_publisher import FramePublisher
 from so101_driver.joint_codec import JOINT_NAMES, command_to_action, observation_to_positions
+from so101_driver.sim_camera_pose import camera_transform
+from so101_driver.torque import set_torque
 from so101_driver.usb_camera import open_usb_camera
 
 CONTROL_HZ = 50.0
 JOINT_STATE_HZ = 30.0
 CAMERA_HZ = 10.0
 CAMERA_FRAME = "external_cam_optical_frame"
+ROBOT_FRAME = "world"
 
 
 def _calibration_file() -> Path:
@@ -47,9 +51,10 @@ class DriverNode(rclpy.node.Node):
         super().__init__("so101_driver")
         self._use_sim: bool = self.declare_parameter("use_sim", True).value
         port: str = self.declare_parameter("port", "").value
+        enable_torque: bool = self.declare_parameter("enable_torque", False).value
         self.get_logger().info("Mode: simulation" if self._use_sim else f"Mode: hardware (port={port})")
 
-        self._robot = self._connect_arm(port)
+        self._robot = self._connect_arm(port, enable_torque)
         self.get_logger().info(f"Robot connected: {type(self._robot).__name__}")
 
         self._pending_action: dict[str, float] = {}
@@ -82,7 +87,7 @@ class DriverNode(rclpy.node.Node):
         msg.header.stamp = self.get_clock().now().to_msg()
         self._joint_state_pub.publish(msg)
 
-    def _connect_arm(self, port: str) -> SO101Sim | SO101Follower:
+    def _connect_arm(self, port: str, enable_torque: bool = False) -> SO101Sim | SO101Follower:
         """Creates and connects the backend chosen by use_sim (provided)."""
         if self._use_sim:
             robot = SO101Sim()
@@ -108,10 +113,11 @@ class DriverNode(rclpy.node.Node):
                 f"{calibration_file} does not match the motors: wrong file for this arm? "
                 "Re-run `lerobot-calibrate`."
             )
-        robot.bus.disable_torque()  # Comment out this line to control the robot.
-        self.get_logger().info(
-            "Torque disabled: arm can be moved freely by hand. Remove this part to control the arm."
-        )
+        set_torque(robot, enable_torque)
+        if enable_torque:
+            self.get_logger().warn("Torque enabled: the arm follows /joint_command, keep the power switch in reach.")
+        else:
+            self.get_logger().info("Torque disabled: arm can be moved freely by hand. Pass enable_torque:=true to control the arm.")
         return robot
 
     def _start_sim_camera(self):
@@ -125,6 +131,11 @@ class DriverNode(rclpy.node.Node):
         # shortcut: renders while your timers step the physics; fine for a camera image.
         self._camera_publisher = FramePublisher(self, self._robot.render_camera, camera_info, CAMERA_HZ)
         self._camera_publisher.start()
+        self._camera_pose_broadcaster = StaticTransformBroadcaster(self)
+        stamp = self.get_clock().now().to_msg()
+        self._camera_pose_broadcaster.sendTransform(
+            camera_transform(self._robot.get_camera_extrinsics(), ROBOT_FRAME, CAMERA_FRAME, stamp)
+        )
 
     def _start_usb_camera(self):
         """Publishes the USB camera of the real arm on the same topics as the simulated one."""
@@ -132,11 +143,12 @@ class DriverNode(rclpy.node.Node):
         width: int = self.declare_parameter("camera_width", 640).value
         height: int = self.declare_parameter("camera_height", 480).value
         fov_deg: float = self.declare_parameter("camera_fov_deg", 70.0).value
+        fourcc: str = self.declare_parameter("camera_fourcc", "").value
         if index < 0:
             self.get_logger().info("USB camera disabled (camera_index < 0)")
             return
         try:
-            camera = open_usb_camera(index, width, height)
+            camera = open_usb_camera(index, width, height, fourcc)
         except Exception:
             self._robot.disconnect()
             raise
