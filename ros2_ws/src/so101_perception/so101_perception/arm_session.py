@@ -4,10 +4,11 @@ from typing import Protocol
 
 import numpy as np
 
-from so101_perception.arm_poses import interpolate
+from so101_perception.arm_poses import ARM_JOINTS, interpolate
 
 COMMAND_RATE_HZ = 20.0
-ARRIVAL_TOLERANCE_RAD = 0.04
+ARRIVAL_TOLERANCE_RAD = 0.1
+SETTLED_RAD = 0.01
 ARRIVAL_TIMEOUT_S = 6.0
 ARRIVAL_POLL_S = 0.2
 EXPOSURE_WAIT_S = 0.5
@@ -44,15 +45,25 @@ def travel_to(arm: Arm, target: np.ndarray, speed: float) -> None:
 
 
 def wait_for_arrival(arm: Arm, target: np.ndarray) -> None:
-    waited = 0.0
+    waited, previous, gap = 0.0, None, None
     while waited <= ARRIVAL_TIMEOUT_S:
         positions = arm.joint_positions()
-        if positions is not None and np.abs(positions - target).max() <= ARRIVAL_TOLERANCE_RAD:
-            arm.wait(EXPOSURE_WAIT_S)
-            return
+        if positions is not None:
+            gap = np.abs(positions - target)
+            steady = previous is not None and np.abs(positions - previous).max() <= SETTLED_RAD
+            if steady and gap.max() <= ARRIVAL_TOLERANCE_RAD:
+                arm.wait(EXPOSURE_WAIT_S)
+                return
+            previous = positions
         arm.wait(ARRIVAL_POLL_S)
         waited += ARRIVAL_POLL_S
-    raise RuntimeError("the arm did not reach the commanded pose, stop and check it")
+    if gap is None:
+        raise RuntimeError("no /joint_states received while the arm moved: is the driver running?")
+    worst = int(np.argmax(gap))
+    raise RuntimeError(
+        f"{ARM_JOINTS[worst]} stopped {gap[worst]:.2f} rad from its target after {ARRIVAL_TIMEOUT_S:.0f} s: "
+        "is the torque enabled (--torque) and the joint free to move?"
+    )
 
 
 def cube_pixel(camera: Camera, detect: Callable[[np.ndarray], tuple[float, float] | None]) -> np.ndarray | None:
