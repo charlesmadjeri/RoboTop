@@ -31,6 +31,7 @@ tqdm = "*"
 deepdiff = "*"
 draccus = "*"
 setuptools = "<80"
+pynput = ">=1.8.2,<2"
 
 [pypi-dependencies]
 rustypot = ">=1.13.1,<2"  # Feetech bus driver since LeRobot v0.7
