@@ -41,9 +41,11 @@ jobs:
         run: |
           sudo apt-get install -y --no-install-recommends ffmpeg v4l2loopback-dkms "linux-headers-$(uname -r)"
           sudo modprobe v4l2loopback video_nr=10 exclusive_caps=1 card_label=ci-camera
-          sudo chmod 666 /dev/video10
-          nohup ffmpeg -loglevel error -re -f lavfi -i testsrc=size=640x480:rate=15 -pix_fmt yuyv422 -f v4l2 /dev/video10 > artifacts/fake-real/ffmpeg.log 2>&1 &
+          sudo udevadm settle
+          sudo setsid -f ffmpeg -loglevel error -re -f lavfi -i testsrc=size=640x480:rate=15 -pix_fmt yuyv422 -f v4l2 /dev/video10 > artifacts/fake-real/ffmpeg.log 2>&1
           sleep 3
+          pgrep -x ffmpeg
+          sudo chmod 666 /dev/video10
           echo "index=10" >> "$GITHUB_OUTPUT"
       - if: steps.camera.outcome != 'success'
         run: echo "::notice::Virtual camera skipped, v4l2loopback is not available on this runner"
