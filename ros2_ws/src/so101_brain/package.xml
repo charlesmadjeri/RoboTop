@@ -11,6 +11,11 @@
   <depend>std_srvs</depend>
   <depend>geometry_msgs</depend>
   <depend>sensor_msgs</depend>
+  <depend>ament_index_python</depend>
+  <depend>so101_interfaces</depend>
+  <depend>so101_description</depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-scipy</exec_depend>
 
   <export>
     <build_type>ament_python</build_type>

@@ -1,24 +1,16 @@
 #!/usr/bin/env python3
-"""brain_node.py - intelligence of the arm: kinematics, then pick & place.
-
-Never talks to the backend: reads /joint_states, commands through /joint_command.
-"""
 from pathlib import Path
-import numpy as np
+
 import rclpy
 import rclpy.node
 from ament_index_python.packages import get_package_share_directory
 from geometry_msgs.msg import PoseStamped, Vector3Stamped
-from ikpy.chain import Chain
 from rclpy.executors import ExternalShutdownException
-from scipy.spatial.transform import Rotation
 from sensor_msgs.msg import JointState
-try:
-    from so101_interfaces.srv import GoToTarget
-    HAS_GOTO_SRV = True
-except ImportError:
-    GoToTarget = None
-    HAS_GOTO_SRV = False
+from so101_interfaces.srv import GoToTarget
+
+from so101_brain.arm_kinematics import ArmKinematics
+from so101_brain.joint_interpolator import JointInterpolator
 
 ARM_JOINT_NAMES = [
     "shoulder_pan",
@@ -28,175 +20,117 @@ ARM_JOINT_NAMES = [
     "wrist_roll",
 ]
 JOINT_NAMES = ARM_JOINT_NAMES + ["gripper"]
+BASE_FRAME = "base_link"
+REACH_TOLERANCE_M = 0.01
+CONTROL_PERIOD_S = 0.02
+
+
+def default_urdf_path() -> str:
+    share = Path(get_package_share_directory("so101_description"))
+    return str(share / "urdf" / "so101.urdf")
 
 
 class BrainNode(rclpy.node.Node):
-    """Brain of the arm: kinematics, then pick & place."""
 
     def __init__(self):
         super().__init__("so101_brain")
+        urdf_path = self.declare_parameter("urdf_path", "").value or default_urdf_path()
+        self._step_size_m = self.declare_parameter("step_size_m", 0.01).value
+        self._max_vector = self.declare_parameter("max_vector_component", 3.0).value
+        max_joint_step = self.declare_parameter("max_joint_step_rad", 0.015).value
 
-        # 1. Chargement de la chaîne cinématique URDF (7 links : OriginLink + 5 actifs + gripper_frame_joint)
-        urdf_path = Path(get_package_share_directory("so101_description")) / "urdf" / "so101.urdf"
-        self._chain = Chain.from_urdf_file(
-            str(urdf_path),
-            base_elements=["base_link"],
-            active_links_mask=[False, True, True, True, True, True, False],
-        )
+        self._kinematics = ArmKinematics(urdf_path)
+        self._interpolator = JointInterpolator(len(ARM_JOINT_NAMES), max_joint_step)
+        self._current_q = [0.0] * len(ARM_JOINT_NAMES)
+        self._teleop_active = False
 
-        # 2. État des articulations et variables d'interpolation
-        self._current_q = [0.0] * 5
-        self._target_q = [0.0] * 5
-        self._commanded_q = [0.0] * 5
-        self._initialized_q = False
-        self._step_size_m = 0.01  # 1 cm par impulsion clavier (-1, 0, 1)
-
-        # 3. Publishers & Subscribers
-        self._tcp_pose_pub = self.create_publisher(PoseStamped, "/end_effector_pose", 10)
-        self._joint_cmd_pub = self.create_publisher(JointState, "/joint_command", 10)
-
-        self._joint_state_sub = self.create_subscription(
-            JointState, "/joint_states", self._cb_joint_states, 10
-        )
-        self._instruction_sub = self.create_subscription(
-            Vector3Stamped, "/instruction_vector", self._cb_instruction_vector, 1
-        )
-
-        # 4. Service de déplacement absolu
-        if HAS_GOTO_SRV:
-            self._goto_srv = self.create_service(GoToTarget, "/go_to_target", self._cb_go_to_target)
-
-        # 5. Timer d'interpolation douce à 50 Hz (20 ms)
-        self._interp_timer = self.create_timer(0.02, self._control_loop)
+        self._pose_pub = self.create_publisher(PoseStamped, "/end_effector_pose", 10)
+        self._command_pub = self.create_publisher(JointState, "/joint_command", 10)
+        self.create_subscription(JointState, "/joint_states", self._cb_joint_states, 10)
+        self.create_subscription(Vector3Stamped, "/instruction_vector", self._cb_instruction_vector, 1)
+        self.create_service(GoToTarget, "/go_to_target", self._cb_go_to_target)
+        self.create_timer(CONTROL_PERIOD_S, self._control_loop)
 
         self.get_logger().info("Brain node ready.")
 
-    def _to_ikpy_q(self, q_5: list[float]) -> list[float]:
-        """Ajoute les 2 joints fixes (OriginLink et gripper_frame_joint) autour des 5 angles moteurs."""
-        return [0.0] + list(q_5) + [0.0]
-
     def _cb_joint_states(self, msg: JointState):
-        name_to_pos = dict(zip(msg.name, msg.position))
-        if all(name in name_to_pos for name in ARM_JOINT_NAMES):
-            self._current_q = [float(name_to_pos[name]) for name in ARM_JOINT_NAMES]
-            if not self._initialized_q:
-                self._target_q = list(self._current_q)
-                self._commanded_q = list(self._current_q)
-                self._initialized_q = True
-            self._publish_end_effector_pose()
-
-    def _forward_kinematics(self, q: list[float]) -> np.ndarray:
-        """Retourne la matrice homogène 4x4 du TCP (gripper_frame_link)."""
-        return self._chain.forward_kinematics(self._to_ikpy_q(q))
+        positions = dict(zip(msg.name, msg.position))
+        if not all(name in positions for name in ARM_JOINT_NAMES):
+            return
+        self._current_q = [float(positions[name]) for name in ARM_JOINT_NAMES]
+        if not self._interpolator.ready:
+            self._interpolator.start(self._current_q)
+        self._publish_end_effector_pose()
 
     def _publish_end_effector_pose(self):
-        tf_matrix = self._forward_kinematics(self._current_q)
-        pos = tf_matrix[:3, 3]
-        quat = Rotation.from_matrix(tf_matrix[:3, :3]).as_quat()  # [x, y, z, w]
-
+        position, quat = self._kinematics.pose(self._current_q)
         msg = PoseStamped()
         msg.header.stamp = self.get_clock().now().to_msg()
-        msg.header.frame_id = "base_link"
-        msg.pose.position.x = float(pos[0])
-        msg.pose.position.y = float(pos[1])
-        msg.pose.position.z = float(pos[2])
-        msg.pose.orientation.x = float(quat[0])
-        msg.pose.orientation.y = float(quat[1])
-        msg.pose.orientation.z = float(quat[2])
-        msg.pose.orientation.w = float(quat[3])
-        self._tcp_pose_pub.publish(msg)
-
-    def _solve_ik(self, target_position: list[float]) -> list[float]:
-        """Calcule les 5 angles moteurs (rad) pour atteindre target_position = [x, y, z]."""
-        init_q = self._to_ikpy_q(self._current_q)
-        for i, link in enumerate(self._chain.links):
-            low, high = link.bounds
-            if low is not None and init_q[i] < low:
-                init_q[i] = float(low)
-            if high is not None and init_q[i] > high:
-                init_q[i] = float(high)
-
-        ik_full = self._chain.inverse_kinematics(
-            target_position=target_position,
-            initial_position=init_q,
+        msg.header.frame_id = BASE_FRAME
+        msg.pose.position.x, msg.pose.position.y, msg.pose.position.z = (float(v) for v in position)
+        msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w = (
+            float(v) for v in quat
         )
-        return [float(angle) for angle in ik_full[1:6]]
+        self._pose_pub.publish(msg)
 
     def _send_joint_command(self, q: list[float], gripper_pct: float | None = None):
         msg = JointState()
         msg.header.stamp = self.get_clock().now().to_msg()
-        if gripper_pct is not None:
-            msg.name = JOINT_NAMES
-            msg.position = list(q) + [float(gripper_pct)]
-        else:
-            msg.name = ARM_JOINT_NAMES
-            msg.position = list(q)
-        self._joint_cmd_pub.publish(msg)
+        msg.name = JOINT_NAMES if gripper_pct is not None else ARM_JOINT_NAMES
+        msg.position = list(q) + ([float(gripper_pct)] if gripper_pct is not None else [])
+        self._command_pub.publish(msg)
+
+    def _clamp(self, value: float) -> float:
+        return max(-self._max_vector, min(self._max_vector, float(value)))
 
     def _cb_instruction_vector(self, msg: Vector3Stamped):
-        """Déplace la cible TCP selon le vecteur envoyé par teleoperator_node."""
-        if not self._initialized_q:
+        if not self._interpolator.ready:
             return
-
-        vx, vy, vz = msg.vector.x, msg.vector.y, msg.vector.z
-
-        # Au relâchement des touches (vecteur nul), on arrête immédiatement la poursuite
-        if vx == 0.0 and vy == 0.0 and vz == 0.0:
-            self._target_q = list(self._commanded_q)
+        vector = [self._clamp(msg.vector.x), self._clamp(msg.vector.y), self._clamp(msg.vector.z)]
+        if not any(vector):
+            if self._teleop_active:
+                self._teleop_active = False
+                self._interpolator.hold()
             return
-
-        # On part de la position actuellement commandée pour éviter toute dérive accumulée
-        current_tcp = self._forward_kinematics(self._commanded_q)[:3, 3]
-        new_target = [
-            float(current_tcp[0] + vx * self._step_size_m),
-            float(current_tcp[1] + vy * self._step_size_m),
-            float(current_tcp[2] + vz * self._step_size_m),
-        ]
-
+        self._teleop_active = True
+        commanded = self._interpolator.commanded
+        origin = self._kinematics.position(commanded)
+        target = [float(origin[i] + vector[i] * self._step_size_m) for i in range(3)]
         try:
-            q_sol = self._solve_ik(new_target)
-            fk_pos = self._forward_kinematics(q_sol)[:3, 3]
-            if np.linalg.norm(fk_pos - np.array(new_target)) < 0.01:
-                self._target_q = q_sol
-        except ValueError as e:
-            self.get_logger().warn(f"IK ignorée (hors limites) : {e}")
+            q_sol = self._kinematics.solve(target, commanded)
+        except ValueError as error:
+            self.get_logger().warn(f"IK skipped: {error}")
+            return
+        if self._kinematics.error(q_sol, target) < REACH_TOLERANCE_M:
+            self._interpolator.target = q_sol
 
     def _cb_go_to_target(self, request, response):
+        frame = request.target_pose.header.frame_id
+        if frame not in ("", BASE_FRAME):
+            response.success = False
+            response.message = f"target_pose.header.frame_id must be {BASE_FRAME}, got {frame}"
+            return response
         p = request.target_pose.pose.position
         target = [p.x, p.y, p.z]
         try:
-            q_sol = self._solve_ik(target)
-            fk_pos = self._forward_kinematics(q_sol)[:3, 3]
-            err_cm = float(np.linalg.norm(fk_pos - np.array(target)) * 100.0)
-
-            if err_cm < 1.0:
-                self._target_q = q_sol
-                response.success = True
-            else:
-                response.success = False
-            response.message = f"IK solved (error: {err_cm:.2f} cm)"
-        except Exception as e:
+            q_sol = self._kinematics.solve(target, self._current_q)
+        except ValueError as error:
             response.success = False
-            response.message = f"IK failed: {e}"
+            response.message = f"IK failed: {error}"
+            return response
+        error_m = self._kinematics.error(q_sol, target)
+        response.success = error_m < REACH_TOLERANCE_M
+        response.message = f"IK solved (error: {error_m * 100.0:.2f} cm)"
+        if response.success:
+            self._interpolator.target = q_sol
         return response
 
     def _control_loop(self):
-        """Interpole progressivement _commanded_q vers _target_q à 50 Hz."""
-        if not self._initialized_q:
+        if not self._interpolator.ready:
             return
-
-        max_step = 0.015  # 0.5 mm par tick -> 2.0 * 0.0005 * 20 Hz = 2 cm/s
-        moved = False
-
-        for i in range(5):
-            diff = self._target_q[i] - self._commanded_q[i]
-            if abs(diff) > 1e-4:
-                step = max(-max_step, min(max_step, diff))
-                self._commanded_q[i] += step
-                moved = True
-
-        if moved:
-            self._send_joint_command(self._commanded_q)
+        q = self._interpolator.step()
+        if q is not None:
+            self._send_joint_command(q)
 
 
 def main(args=None):
