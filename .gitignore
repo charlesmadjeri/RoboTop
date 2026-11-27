@@ -7,6 +7,7 @@ ros2_ws/build/
 ros2_ws/install/
 ros2_ws/log/
 log/
+outputs/
 
 # Python
 __pycache__/
@@ -18,7 +19,8 @@ venv/
 .ruff_cache/
 
 # Editors / OS
-.vscode/
+.vscode/*
+!.vscode/settings.json
 .idea/
 *.swp
 .DS_Store
