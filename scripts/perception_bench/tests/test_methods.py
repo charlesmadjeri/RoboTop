@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import pytest
 
-from perception_bench.methods import METHODS, background_diff, hsv_fixed, hsv_normalized, lab_geometry
+from perception_bench.methods import DEFAULT_METHODS, METHODS, background_diff, hsv_fixed, hsv_normalized, lab_geometry
 
 GREY = (110, 110, 118)
 CUBE_RGB = (200, 30, 40)
@@ -20,7 +20,7 @@ def scene(size=(240, 320), cube=True, box=True, cast=(1.0, 1.0, 1.0)):
     return np.clip(image * np.array(cast), 0, 255).astype(np.uint8)
 
 
-@pytest.fixture(params=sorted(METHODS))
+@pytest.fixture(params=sorted(DEFAULT_METHODS))
 def detect(request):
     return METHODS[request.param](scene(cube=False))
 
