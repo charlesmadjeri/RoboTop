@@ -79,21 +79,31 @@ def pose_errors_px(parameters: np.ndarray, pixels: np.ndarray, gripper_poses: np
     return np.linalg.norm(project_cube(parameters, gripper_poses, K) - pixels, axis=1)
 
 
+def robust_parameters(pixels: np.ndarray, gripper_poses: np.ndarray, K: np.ndarray, fit_offset: bool) -> np.ndarray:
+    check_poses(gripper_poses, fit_offset)
+    start = initial_parameters(pixels, gripper_poses, K, fit_offset)
+    return levenberg_marquardt(reprojection_residuals(pixels, gripper_poses, K), start, ROBUST_SCALE_PX)
+
+
 def solve_from_arm(
     pixels: np.ndarray, gripper_poses: np.ndarray, K: np.ndarray, fit_offset: bool = True
 ) -> ArmCalibration:
     pixels = np.asarray(pixels, dtype=np.float64)
     gripper_poses = np.asarray(gripper_poses, dtype=np.float64)
-    check_poses(gripper_poses, fit_offset)
-    start = initial_parameters(pixels, gripper_poses, K, fit_offset)
-    robust = levenberg_marquardt(reprojection_residuals(pixels, gripper_poses, K), start, ROBUST_SCALE_PX)
+    robust = robust_parameters(pixels, gripper_poses, K, fit_offset)
     errors = pose_errors_px(robust, pixels, gripper_poses, K)
     if np.median(errors) > MAX_MEDIAN_RESIDUAL_PX:
         raise ValueError("the cube detections do not fit any camera pose, check the cube is held by the gripper")
     inliers = errors <= max(INLIER_FACTOR * float(np.median(errors)), MIN_INLIER_PX)
     if inliers.sum() < MIN_POSES:
         raise ValueError(f"only {int(inliers.sum())} of {len(inliers)} arm poses agree, check the cube detections")
-    fitted = levenberg_marquardt(reprojection_residuals(pixels[inliers], gripper_poses[inliers], K), robust)
+    return refine(pixels, gripper_poses, K, robust, inliers)
+
+
+def refine(
+    pixels: np.ndarray, gripper_poses: np.ndarray, K: np.ndarray, start: np.ndarray, inliers: np.ndarray
+) -> ArmCalibration:
+    fitted = levenberg_marquardt(reprojection_residuals(pixels[inliers], gripper_poses[inliers], K), start)
     camera_from_robot = camera_from_robot_of(fitted)
     grasp_offset = grasp_offset_of(fitted)
     depths = cube_positions(gripper_poses[inliers], grasp_offset) @ camera_from_robot[2, :3] + camera_from_robot[2, 3]

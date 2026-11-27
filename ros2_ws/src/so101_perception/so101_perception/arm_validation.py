@@ -1,6 +1,6 @@
 import numpy as np
 
-from so101_perception.arm_calibration import ArmCalibration, cube_positions, solve_from_arm
+from so101_perception.arm_calibration import ArmCalibration, cube_positions, refine, robust_parameters, solve_from_arm
 from so101_perception.projection import pixel_to_ray
 
 
@@ -19,15 +19,14 @@ def held_out_error(
     return distance_to_pixel_ray(point, pixel, K, calibration.robot_from_camera)
 
 
-def leave_one_out_errors(
-    pixels: np.ndarray, gripper_poses: np.ndarray, K: np.ndarray, fit_offset: bool = True
-) -> np.ndarray:
+def leave_one_out_errors(pixels: np.ndarray, gripper_poses: np.ndarray, K: np.ndarray) -> np.ndarray:
     pixels = np.asarray(pixels, dtype=np.float64)
     gripper_poses = np.asarray(gripper_poses, dtype=np.float64)
-    kept = np.flatnonzero(solve_from_arm(pixels, gripper_poses, K, fit_offset).inliers)
+    kept = np.flatnonzero(solve_from_arm(pixels, gripper_poses, K).inliers)
     errors = []
     for left_out in kept:
         rest = kept[kept != left_out]
-        calibration = solve_from_arm(pixels[rest], gripper_poses[rest], K, fit_offset)
+        start = robust_parameters(pixels[rest], gripper_poses[rest], K, True)
+        calibration = refine(pixels[rest], gripper_poses[rest], K, start, np.ones(len(rest), dtype=bool))
         errors.append(held_out_error(calibration, pixels[left_out], gripper_poses[left_out], K))
     return np.array(errors)

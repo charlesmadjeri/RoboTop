@@ -57,8 +57,8 @@ millimeters at best.
 The ruler method needs measured places and a new measure each time the camera moves. The arm can replace the ruler: it
 knows where its gripper is (`gripper_frame_link` of the URDF, from the joint states). With the cube held in the gripper,
 each arm pose gives a 3D point in the robot frame and, from the camera, its pixel. `so101_perception/arm_calibration.py`
-solves the camera pose from at least 8 such pairs. It has no ROS import, the command that collects the pairs is a
-separate step.
+solves the camera pose from at least 8 such pairs. It has no ROS import: `calibrate_from_arm` (next section) collects
+the pairs.
 
 - The cube center is not the gripper frame: a fixed offset in the gripper frame (3 values) is fitted with the pose. It
   absorbs the grasp and the part of the cube hidden by the jaws. It is only observable when the gripper orientation
@@ -75,6 +75,40 @@ the table points, 1 cm gives about 2 cm. The camera pose itself moves more than 
 noise, because the workspace is small next to the camera distance), and that error partly cancels where the poses
 were sampled. Judge a calibration by the located positions, not by the camera pose. The accuracy of the real SO-101
 kinematics is not measured yet.
+
+## Calibrate from the arm
+
+`calibrate_from_arm` moves the arm through 12 preset poses (`arm_poses.py`), spread over the workspace with the wrist
+turned differently at each. At each pose it waits for the arm to stop, reads the TF `world -> gripper_frame_link`,
+takes 3 frames and keeps the median pixel of the cube. It then solves, checks on held-out poses and writes the file.
+
+1. Run the driver, the `robot_state_publisher` of `so101_description` (it gives the TF of the gripper frame) and the
+   camera, with the camera mode of the run.
+2. `calibrate_from_arm --dry-run` prints the poses, the longest move and the duration. The arm does not move.
+3. Put the cube in the gripper. By hand before the run, or let the command do it: `--grip OPEN CLOSED` opens the jaws
+   (percent), waits for the cube, and closes them. The values depend on the cube and the jaws, choose them with care.
+4. `calibrate_from_arm --fov-deg 75 --output camera_pose.json`. Without `--fov-deg` it uses the K of
+   `/external_cam/camera_info`, and 75 degrees if there is none. It prints the largest travel of the first move, and
+   waits for Enter: clear the workspace and keep the power switch in reach. The joints move at most 0.4 rad/s
+   (`--speed`, at most 1.0), in steps of 20 Hz. If a pose is not reached in 6 s the command stops with a message.
+5. Read the report: the residual of each pose in pixels, the poses dropped as wrong detections or skipped because the
+   cube was not found, the median and worst held-out error, and the offset of the cube center from the gripper frame.
+   A pose dropped or skipped is not a failure. Below 9 kept poses the held-out check is impossible and nothing is
+   written.
+6. The file is written when the median held-out error is at most 1 cm (`--max-error-cm`). Above it, nothing is written
+   unless `--force` is given. Then fall back to the ruler method.
+7. Moved the camera: run it again. Nothing else changes.
+
+The presets are chosen for the simulated camera view. On a real scene, poses where the cube is out of the picture are
+skipped. If too many are, give the command your own poses with `--poses poses.json`, a list of 5 joint angles in
+radians (`shoulder_pan`, `shoulder_lift`, `elbow_flex`, `wrist_flex`, `wrist_roll`). Poses closer than 0.1 rad to a joint
+limit are refused. The gripper is never in a pose, only in `--grip`.
+
+In the simulator, with the cube moved to the gripper at the 12 poses and exact kinematics
+(`test_sim_arm_calibration.py`), all 12 poses are detected, the median held-out error is 0.2 cm, the table points are
+located within 2 mm and the camera pose is 5 mm and 0.4 degree off. The real arm has not been run yet, and its
+kinematics are less exact. With 6 mm to 1.5 cm of noise on the arm positions the held-out error is 0.5 cm to 2 cm, and
+at 3 cm no pose is found.
 
 ## Intrinsics
 
@@ -97,4 +131,7 @@ or places on a line. `test_calibrate_camera.py` runs the command on rendered cub
 intrinsics, the report of a wrongly measured place and the error messages. `test_sim_cube_calibration.py` calibrates from
 the simulator's own renders. `test_arm_calibration.py` and `test_arm_validation.py` solve from synthetic arm poses: exact
 recovery of the pose and the offset, noise, wrong detections dropped, and the refusals (too few poses, one height, a fixed
-orientation, pixels that fit no pose).
+orientation, pixels that fit no pose). `test_arm_poses.py` checks the presets against the simulator: within the limits,
+inside the camera view, clear of the table, no contact on the way between them. `test_arm_session.py` runs the moves and
+the sampling on a fake arm, `test_ros_rig.py` runs the ROS side against a fake driver, `test_calibrate_from_arm.py` the
+refusals and the dry run, and `test_sim_arm_calibration.py` the whole sequence on the simulated arm.
