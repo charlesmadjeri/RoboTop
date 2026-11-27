@@ -27,10 +27,11 @@ Without a pose (file missing at start stops the node, TF not yet there only warn
 In simulation the driver publishes the TF, so the default works. On the real arm, calibrate first and pass the file:
 
 ```
-ros2 launch so101_bringup so101.launch.py use_sim:=false port:=<port> camera_fov_deg:=75 camera_pose_file:=camera_pose.json
+pixi run launch --backend real --port <port> --profile camx
 ```
 
-`pixi run launch` does not forward `camera_pose_file`, so call `ros2 launch` after `pixi run build` (inside `pixi shell`).
+Put `"camera_pose_file": "camera_pose.json"` in `profiles/camx.json` once the camera is calibrated. The same
+arguments work with `ros2 launch so101_bringup so101.launch.py use_sim:=false port:=<port> camera_pose_file:=camera_pose.json`.
 
 ## How it works
 

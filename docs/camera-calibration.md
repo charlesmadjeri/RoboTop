@@ -56,7 +56,7 @@ millimeters at best.
 
 `K` is needed too. Without a measured one, `--fov-deg` (default 70, the driver default) estimates it from the horizontal
 field of view with a centered principal point and square pixels. For the CM678, pass `--fov-deg 75` here and
-`camera_fov_deg:=75` to the driver: the two values must be the same or the positions are scaled wrongly.
+`camera_fov_deg:=75` to the driver (`--profile camx` sets it): the two values must be the same or the positions are scaled wrongly.
 `--intrinsics FX FY CX CY` replaces the estimate with measured values.
 
 ## Limits
