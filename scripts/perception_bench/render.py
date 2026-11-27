@@ -44,8 +44,9 @@ def _mask(seg: np.ndarray, geoms: np.ndarray) -> np.ndarray:
 def _target(visible: np.ndarray, full: np.ndarray, geoms: np.ndarray) -> Target:
     visible_mask = _mask(visible, geoms)
     count = int(visible_mask.sum())
-    centroid = None
+    centroid = bounds = None
     if count:
         ys, xs = np.nonzero(visible_mask)
         centroid = (float(xs.mean()), float(ys.mean()))
-    return Target(count, int(_mask(full, geoms).sum()), centroid)
+        bounds = (int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1)
+    return Target(count, int(_mask(full, geoms).sum()), centroid, bounds)

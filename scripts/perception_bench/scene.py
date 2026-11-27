@@ -1,9 +1,11 @@
+import tempfile
 from dataclasses import dataclass
+from pathlib import Path
 
 import mujoco
 import numpy as np
 
-from perception_bench import REPO
+from perception_bench import REPO, markers
 
 SCENE_PATH = REPO / "sim" / "so101_sim" / "assets" / "so101" / "scene_tek5.xml"
 CAMERA = "external_cam"
@@ -28,7 +30,7 @@ class Lighting:
 
 
 class Scene:
-    def __init__(self, width: int = 320, height: int = 240):
+    def __init__(self, width: int = 320, height: int = 240, with_markers: bool = False):
         spec = mujoco.MjSpec.from_file(str(SCENE_PATH))
         for index in range(MAX_DECOYS):
             body = spec.worldbody.add_body(name=f"decoy_{index}", mocap=True, pos=PARK.tolist())
@@ -40,7 +42,10 @@ class Scene:
                 contype=0,
                 conaffinity=0,
             )
-        self.model = spec.compile()
+        with tempfile.TemporaryDirectory() as folder:
+            if with_markers:
+                markers.add_markers(spec, Path(folder))
+            self.model = spec.compile()
         self.data = mujoco.MjData(self.model)
         self.width, self.height = width, height
         self.renderer = mujoco.Renderer(self.model, height=height, width=width)
