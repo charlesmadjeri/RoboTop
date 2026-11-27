@@ -80,14 +80,24 @@ ros2 topic pub --once /joint_command sensor_msgs/msg/JointState \
 pixi run rviz2                        # the arm is assembled and follows the command
 ```
 
-Unit tests of the conversions:
+Unit tests of the conversions, and of the real backend on a fake bus:
 
 ```bash
-cd ros2_ws/src/so101_driver
-PYTHONPATH=. PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest test
+pixi run test
 ```
 
-`PYTEST_DISABLE_PLUGIN_AUTOLOAD=1` avoids a crash of the ROS `launch_testing` pytest plugin with recent pytest.
+`PYTEST_DISABLE_PLUGIN_AUTOLOAD=1`, set by the task, avoids a crash of the ROS `launch_testing` pytest plugin with recent pytest.
+
+The real backend is tested without the arm: `test/fake_bus.py` replaces rustypot's `Bus` with a table of STS3215 registers per servo (`test/fake_arm.py` adds a calibration file and installs it). The unit tests cover the handshake, the calibration check, the unit conversions, the clamp to the calibrated range, and the driver's failure paths (empty port, missing calibration, port that cannot be opened, silent servo, calibration of another arm). `pixi run functional-test --backend fake-real` starts the whole stack with `use_sim:=false` on that bus (test-only hook `scripts/functional/fake_hardware/sitecustomize.py`, active when `SO101_FAKE_BUS=1`) and checks `/joint_states`, the goal ticks that `/joint_command` produces, and that the released arm stays still. `--camera-index <n>` also checks a USB camera, which CI feeds from a `v4l2loopback` device when the runner allows it, and skips with a notice otherwise.
+
+## Not covered without the arm
+
+- Servo timing: the fake answers instantly and its position follows the goal at once, so latency, speed, acceleration and the PID tuning are never exercised.
+- Torque and protection: overload, current and temperature limits are not simulated, and the fake never reports a fault status.
+- Calibration drift: only a matching and a mismatching offset are tested, not a servo that slowly shifts.
+- USB and serial faults: a lost or corrupted packet, an unplugged cable and baud rate errors are only approximated by a servo that stops answering.
+- The effect of `configure()` on a real servo: the fake records the registers written, the servo may refuse or round them.
+- Real USB cameras: the virtual camera checks the OpenCV capture path, not a webcam's exposure, latency or formats.
 
 ## Known limits
 

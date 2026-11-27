@@ -7,6 +7,7 @@ import sys
 import time
 from pathlib import Path
 
+import backends
 import display
 import images
 import overlay
@@ -20,8 +21,8 @@ MIN_JOINT_RATE = 20.0
 MIN_IMAGE_RATE = 1.0
 
 
-def start_stack(out, env):
-    command = ["ros2", "launch", "--noninteractive", "so101_bringup", "so101.launch.py", "use_sim:=true", "camera_index:=-1"]
+def start_stack(out, env, launch_arguments):
+    command = ["ros2", "launch", "--noninteractive", "so101_bringup", "so101.launch.py", *launch_arguments]
     return Managed("stack", command, out / "launch.log", env)
 
 
@@ -91,11 +92,13 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", default="artifacts")
     parser.add_argument("--target", type=float, default=0.5, help="shoulder_pan target in radians")
+    parser.add_argument("--backend", choices=("sim", "fake-real"), default="sim")
+    parser.add_argument("--camera-index", type=int, default=-1, help="fake-real: USB camera index, -1 for none")
     args = parser.parse_args()
     out = Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
-    for stale in [*out.glob("*.png"), *out.glob("*.log")]:
-        stale.unlink()
+    for stale in [*out.glob("*.png"), *(out / name for name in ("launch.log", "rviz.log", "fake_bus.log"))]:
+        stale.unlink(missing_ok=True)
     overlay.load()
     xvfb, shown = display.start()
     env = {
@@ -106,7 +109,6 @@ def main():
         "ROS_DOMAIN_ID": str(random.randint(1, 100)),
     }
     env.setdefault("MUJOCO_GL", "egl")
-    os.environ.update(env)
     started = []
 
     def alive():
@@ -114,9 +116,20 @@ def main():
             process.check()
 
     try:
-        started.append(start_stack(out, env))
-        started.append(start_rviz(out, env))
-        scenario(out, shown, alive, args.target)
+        if args.backend == "sim":
+            launch_arguments = backends.SIM
+        else:
+            launch_arguments = backends.fake_real(out, env, args.camera_index)
+        os.environ.update(env)
+        started.append(start_stack(out, env, launch_arguments))
+        if args.backend == "sim":
+            started.append(start_rviz(out, env))
+            scenario(out, shown, alive, args.target)
+        else:
+            import fake_arm
+            import hardware
+
+            hardware.scenario(fake_arm, out / "fake_bus.log", alive, args.camera_index >= 0)
     except Exception as error:
         print(f"FAIL: {error}")
         try:
