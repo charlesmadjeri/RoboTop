@@ -8,7 +8,7 @@ import numpy as np
 import rclpy
 import rclpy.node
 from ament_index_python.packages import get_package_share_directory
-from geometry_msgs.msg import PoseStamped, Vector3
+from geometry_msgs.msg import PoseStamped, Vector3Stamped
 from ikpy.chain import Chain
 from rclpy.executors import ExternalShutdownException
 from scipy.spatial.transform import Rotation
@@ -59,7 +59,7 @@ class BrainNode(rclpy.node.Node):
             JointState, "/joint_states", self._cb_joint_states, 10
         )
         self._instruction_sub = self.create_subscription(
-            Vector3, "/instruction_vector", self._cb_instruction_vector, 10
+            Vector3Stamped, "/instruction_vector", self._cb_instruction_vector, 10
         )
 
         # 4. Service de déplacement absolu
@@ -125,7 +125,7 @@ class BrainNode(rclpy.node.Node):
             msg.position = list(q)
         self._joint_cmd_pub.publish(msg)
 
-    def _cb_instruction_vector(self, msg: Vector3):
+    def _cb_instruction_vector(self, msg: Vector3Stamped):
         """Déplace la cible TCP selon un vecteur directionnel (-1, 0, 1) envoyé par le CLI."""
         if not self._initialized_q:
             return
