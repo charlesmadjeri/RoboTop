@@ -23,4 +23,6 @@ def load(name: str, directory: Path = PROFILES_DIR) -> dict:
 
 def launch_arguments(settings: dict, overrides: dict) -> list[str]:
     merged = {**settings, **{key: value for key, value in overrides.items() if value not in (None, "")}}
+    if "camera_pose_file" in merged:
+        merged["camera_pose_file"] = str(PROFILES_DIR.parent / merged["camera_pose_file"])
     return [f"{key}:={value}" for key, value in merged.items()]

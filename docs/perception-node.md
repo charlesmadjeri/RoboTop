@@ -30,7 +30,7 @@ In simulation the driver publishes the TF, so the default works. On the real arm
 pixi run launch --backend real --port <port> --profile camx
 ```
 
-Put `"camera_pose_file": "camera_pose.json"` in `profiles/camx.json` once the camera is calibrated. The same
+`profiles/camx.json` already holds `"camera_pose_file": "camera_pose.json"`, resolved from the repo root. The same
 arguments work with `ros2 launch so101_bringup so101.launch.py use_sim:=false port:=<port> camera_pose_file:=camera_pose.json`.
 
 ## How it works
