@@ -185,7 +185,7 @@ class BrainNode(rclpy.node.Node):
         if not self._initialized_q:
             return
 
-        max_step = 0.001  # 0.5 mm par tick -> 2.0 * 0.0005 * 20 Hz = 2 cm/s
+        max_step = 0.015  # 0.5 mm par tick -> 2.0 * 0.0005 * 20 Hz = 2 cm/s
         moved = False
 
         for i in range(5):
