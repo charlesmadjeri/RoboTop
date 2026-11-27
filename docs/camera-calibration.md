@@ -71,20 +71,20 @@ kinematics is not measured yet.
 
 ## The cube
 
-The solve does not need the cube size: the offset between the cube center and the gripper frame is fitted. The size
-matters in three other places.
+The cube is the printed part of the simulator (`hollow_cube_rhombus_50mm.stl`): 50 mm on each side, center 25 mm above
+the table, hollow. The solve does not need its size: the offset between the cube center and the gripper frame is
+fitted. The size matters in two other places.
 
-- **`cube_height`.** The node projects the cube pixel on the plane at the height of the cube center, half the side:
-  0.025 m for a 5 cm cube (the default), 0.03 m for a 6 cm cube. A wrong value shifts the cube on the table by the
-  height error times the tangent of the ray angle from the vertical: 5 mm of error gives 5 mm at 45 degrees. Pass
-  `cube_height:=0.03` to the node, and `--cube-height 0.03` to `calibrate_camera`.
-- **The detected pixel.** It is the centroid of the visible blob, and a tall cube seen from the side shows its side
-  faces, so the pixel sits above the cube center. The error grows with the height of the cube.
-- **The grasp.** A cube close to the opening of the jaws is hard to put in and out.
+- **`cube_height`.** The node projects the cube pixel on the plane at the height of the cube center, 0.025 m, the
+  default of the node and of `calibrate_camera` (`--cube-height`). A wrong value shifts the cube on the table by the
+  height error times the tangent of the ray angle from the vertical: 5 mm of error gives 5 mm at 45 degrees. Another
+  cube needs its own value, half its side.
+- **The detected pixel.** It is the centroid of the visible blob, and the side faces of a cube seen from the side
+  move it above the center. On the simulated cube, 0.025 m is still the best plane (`docs/perception-projection.md`).
+  The holes do not move it.
 
-A smaller cube is better: a 3 to 4 cm cube cuts the centroid error in proportion and leaves room in the jaws. Keep the
-cube low during the run too: the poses calibrate best around where the cube will be used, near the table. They only
-need a spread of 1 cm in height, because a calibration from poses on one plane is refused.
+Keep the cube low during the run too: the poses calibrate best around where the cube will be used, near the table.
+They only need a spread of 1 cm in height, because a calibration from poses on one plane is refused.
 
 ## Intrinsics
 
@@ -149,7 +149,7 @@ millimeters at best.
 - Calibrating the real `K` and the lens distortion is not included. The estimate from the field of view is as good as the stated angle, and the distortion is ignored. A wide angle lens shows larger errors near the image edges.
 - The detection of the cube is tuned on simulated colors. If the cube is not found in a real frame, the HSV ranges of `detection.py` need tuning first.
 - The frame comes from a saved image: there is no live capture inside `calibrate_camera`, `grab_frame` does it beforehand.
-- The method trusts the given places and the cube height (`--cube-height`, 0.025 m by default, 0.03 m for a 6 cm cube): a cube that does not rest on the table gives a wrong pose.
+- The method trusts the given places and the cube height (`--cube-height`, 0.025 m by default, the 50 mm cube): a cube that does not rest on the table gives a wrong pose.
 
 ## Tests
 
