@@ -8,8 +8,8 @@ from geometry_msgs.msg import Vector3Stamped
 from pynput import keyboard
 
 INSTRUCTION_HZ = 20.0
-STEP = 2.0
-BOOST_STEP = 5.0  # used while LSHIFT is held
+STEP = 1.0
+BOOST_STEP = 3.0  # used while LSHIFT is held
 
 # key -> (axis index, sign)
 KEY_MAP = {

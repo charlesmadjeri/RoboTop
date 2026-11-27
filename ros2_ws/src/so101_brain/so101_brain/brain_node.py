@@ -59,7 +59,7 @@ class BrainNode(rclpy.node.Node):
             JointState, "/joint_states", self._cb_joint_states, 10
         )
         self._instruction_sub = self.create_subscription(
-            Vector3Stamped, "/instruction_vector", self._cb_instruction_vector, 10
+            Vector3Stamped, "/instruction_vector", self._cb_instruction_vector, 1
         )
 
         # 4. Service de déplacement absolu
@@ -108,9 +108,17 @@ class BrainNode(rclpy.node.Node):
 
     def _solve_ik(self, target_position: list[float]) -> list[float]:
         """Calcule les 5 angles moteurs (rad) pour atteindre target_position = [x, y, z]."""
+        init_q = self._to_ikpy_q(self._current_q)
+        for i, link in enumerate(self._chain.links):
+            low, high = link.bounds
+            if low is not None and init_q[i] < low:
+                init_q[i] = float(low)
+            if high is not None and init_q[i] > high:
+                init_q[i] = float(high)
+
         ik_full = self._chain.inverse_kinematics(
             target_position=target_position,
-            initial_position=self._to_ikpy_q(self._current_q),
+            initial_position=init_q,
         )
         return [float(angle) for angle in ik_full[1:6]]
 
@@ -126,21 +134,32 @@ class BrainNode(rclpy.node.Node):
         self._joint_cmd_pub.publish(msg)
 
     def _cb_instruction_vector(self, msg: Vector3Stamped):
-        """Déplace la cible TCP selon un vecteur directionnel (-1, 0, 1) envoyé par le CLI."""
+        """Déplace la cible TCP selon le vecteur envoyé par teleoperator_node."""
         if not self._initialized_q:
             return
 
-        current_tcp = self._forward_kinematics(self._target_q)[:3, 3]
+        vx, vy, vz = msg.vector.x, msg.vector.y, msg.vector.z
+
+        # Au relâchement des touches (vecteur nul), on arrête immédiatement la poursuite
+        if vx == 0.0 and vy == 0.0 and vz == 0.0:
+            self._target_q = list(self._commanded_q)
+            return
+
+        # On part de la position actuellement commandée pour éviter toute dérive accumulée
+        current_tcp = self._forward_kinematics(self._commanded_q)[:3, 3]
         new_target = [
-            float(current_tcp[0] + msg.x * self._step_size_m),
-            float(current_tcp[1] + msg.y * self._step_size_m),
-            float(current_tcp[2] + msg.z * self._step_size_m),
+            float(current_tcp[0] + vx * self._step_size_m),
+            float(current_tcp[1] + vy * self._step_size_m),
+            float(current_tcp[2] + vz * self._step_size_m),
         ]
 
-        q_sol = self._solve_ik(new_target)
-        fk_pos = self._forward_kinematics(q_sol)[:3, 3]
-        if np.linalg.norm(fk_pos - np.array(new_target)) < 0.01:
-            self._target_q = q_sol
+        try:
+            q_sol = self._solve_ik(new_target)
+            fk_pos = self._forward_kinematics(q_sol)[:3, 3]
+            if np.linalg.norm(fk_pos - np.array(new_target)) < 0.01:
+                self._target_q = q_sol
+        except ValueError as e:
+            self.get_logger().warn(f"IK ignorée (hors limites) : {e}")
 
     def _cb_go_to_target(self, request, response):
         p = request.target_pose.pose.position
@@ -166,7 +185,7 @@ class BrainNode(rclpy.node.Node):
         if not self._initialized_q:
             return
 
-        max_step = 0.03  # ~1.5 rad/s max
+        max_step = 0.001  # 0.5 mm par tick -> 2.0 * 0.0005 * 20 Hz = 2 cm/s
         moved = False
 
         for i in range(5):
