@@ -13,7 +13,12 @@ from ikpy.chain import Chain
 from rclpy.executors import ExternalShutdownException
 from scipy.spatial.transform import Rotation
 from sensor_msgs.msg import JointState
-from so101_interfaces.srv import GoToTarget
+try:
+    from so101_interfaces.srv import GoToTarget
+    HAS_GOTO_SRV = True
+except ImportError:
+    GoToTarget = None
+    HAS_GOTO_SRV = False
 
 ARM_JOINT_NAMES = [
     "shoulder_pan",
@@ -58,7 +63,8 @@ class BrainNode(rclpy.node.Node):
         )
 
         # 4. Service de déplacement absolu
-        self._goto_srv = self.create_service(GoToTarget, "/go_to_target", self._cb_go_to_target)
+        if HAS_GOTO_SRV:
+            self._goto_srv = self.create_service(GoToTarget, "/go_to_target", self._cb_go_to_target)
 
         # 5. Timer d'interpolation douce à 50 Hz (20 ms)
         self._interp_timer = self.create_timer(0.02, self._control_loop)
@@ -136,7 +142,7 @@ class BrainNode(rclpy.node.Node):
         if np.linalg.norm(fk_pos - np.array(new_target)) < 0.01:
             self._target_q = q_sol
 
-    def _cb_go_to_target(self, request: GoToTarget.Request, response: GoToTarget.Response):
+    def _cb_go_to_target(self, request, response):
         p = request.target_pose.pose.position
         target = [p.x, p.y, p.z]
         try:
