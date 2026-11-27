@@ -19,14 +19,9 @@ ros-jazzy-tf2-ros = "*"
 ros-jazzy-tf-transformations = "*"
 ros-jazzy-image-transport = "*"
 ros-jazzy-message-filters = "*"
-ros-jazzy-rosidl-default-generators = "*"
 ros-jazzy-pinocchio = "*"
-# Workspace build (so101_interfaces is a C++/CMake package)
+# Workspace build
 colcon-common-extensions = "*"
-compilers = "*"
-cmake = ">=3.22,<4"
-ninja = "*"
-pkg-config = "*"
 # Simulation, vision, real arm
 mujoco = ">=3.2"
 opencv = ">=4.10,<5"
@@ -36,6 +31,8 @@ tqdm = "*"
 deepdiff = "*"
 draccus = "*"
 setuptools = "<80"
+pynput = ">=1.8.2,<2"
+pytest = ">=9.2.0,<10"
 
 [pypi-dependencies]
 rustypot = ">=1.13.1,<2"  # Feetech bus driver since LeRobot v0.7
@@ -63,4 +60,7 @@ ros-jazzy-rmw-cyclonedds-cpp = "*"
 build = "python scripts/build.py"
 launch = { cmd = "python scripts/stack.py", depends-on = ["build"] }
 rviz2 = { cmd = "python ../scripts/overlay.py rviz2 -d so101.rviz", cwd = "ros2_ws" }
+doctor = "python scripts/doctor.py"
+test = { cmd = "python -m pytest ros2_ws/src/so101_driver/test scripts/functional", env = { PYTHONPATH = "ros2_ws/src/so101_driver:scripts/functional", PYTEST_DISABLE_PLUGIN_AUTOLOAD = "1" } }
+functional-test = { cmd = "python scripts/functional/run.py", depends-on = ["build"], env = { PYTHONPATH = "scripts" } }
 clean = { cmd = "rm -rf build install log", cwd = "ros2_ws" }  # pixi's own rm, works on Windows too

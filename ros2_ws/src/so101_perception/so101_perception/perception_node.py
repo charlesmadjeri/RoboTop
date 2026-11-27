@@ -4,8 +4,7 @@
 TODO:
   - Subscribe to /external_cam/image_raw and /external_cam/camera_info
   - Publish /object_position (5-10 Hz)
-  - Segment the ball in HSV (yellow/gold)
-  - Find the contour center (u, v)
+  - Get the cube and drop box pixels (u, v) from so101_perception.detection
   - Project pixel -> 3D via K^{-1} and the camera->world TF
   - Intersect with the z=0 plane (table) to estimate the depth
   - Get cam_K / cam_T from the driver (params or CameraInfo)
@@ -13,19 +12,12 @@ TODO:
 import threading
 
 import cv2
-import numpy as np
 import rclpy
 import rclpy.node
 from cv_bridge import CvBridge
 from geometry_msgs.msg import PoseStamped
 from rcl_interfaces.srv import GetParameters
 from sensor_msgs.msg import CameraInfo, Image
-
-
-# -- HSV ranges for the golden ball --------------------------------------------
-# Tune according to the lighting of the MuJoCo scene.
-HSV_MIN = np.array([15, 80, 150], dtype=np.uint8)
-HSV_MAX = np.array([35, 255, 255], dtype=np.uint8)
 
 
 class PerceptionNode(rclpy.node.Node):

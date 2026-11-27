@@ -6,37 +6,25 @@ The only node that talks to the backend: SO101Sim (MuJoCo) or SO101Follower
 knows which one runs.
 
 Todo List:
-  - [DONE] Publish /joint_states in RADIANS (>= 20 Hz) DONE
-  - [DONE] Subscribe to /joint_command (radians, gripper 0-100 %) DONE
-  - [TODO] Real arm: publish the USB camera on /external_cam/image_raw
+  - [DONE] Publish /joint_states in RADIANS (>= 20 Hz)
+  - [DONE] Subscribe to /joint_command (radians, gripper 0-100 %)
+  - [DONE] Real arm: publish the USB camera on /external_cam/image_raw
     (the simulated camera is provided: _start_sim_camera)
 """
 import os
-import threading
-import time
 from pathlib import Path
 
 import rclpy
 import rclpy.node
 from lerobot.robots.so_follower import SO101Follower, SO101FollowerConfig
 from rclpy.executors import ExternalShutdownException
-from cv_bridge import CvBridge
-from sensor_msgs.msg import CameraInfo, Image, JointState
+from sensor_msgs.msg import JointState
 from so101_sim import SO101Sim
 
-JOINT_NAMES = [
-    "shoulder_pan",
-    "shoulder_lift",
-    "elbow_flex",
-    "wrist_flex",
-    "wrist_roll",
-    "gripper",
-]
-
-# Gripper joint limits in the URDF (rad).
-# LeRobot convention: 0 % = closed (lower), 100 % = open (upper).
-GRIPPER_RANGE_RAD = (-0.174533, 1.74533)
-
+from so101_driver.camera_info import build_camera_info, pinhole_intrinsics
+from so101_driver.frame_publisher import FramePublisher
+from so101_driver.joint_codec import JOINT_NAMES, command_to_action, observation_to_positions
+from so101_driver.usb_camera import open_usb_camera
 
 CONTROL_HZ = 50.0
 JOINT_STATE_HZ = 30.0
@@ -52,13 +40,6 @@ def _calibration_file() -> Path:
     return Path(path).expanduser()
 
 
-def _gripper_pct_to_rad(pct: float) -> float:
-    #error handling, 0 <= pct >= 100
-    pct = max(0.0, min(100.0, float(pct)))
-
-    low, high = GRIPPER_RANGE_RAD 
-    return low + (pct / 100) * (high - low)
-
 class DriverNode(rclpy.node.Node):
     """Driver SO-ARM101: /joint_command -> backend -> /joint_states."""
 
@@ -71,57 +52,34 @@ class DriverNode(rclpy.node.Node):
         self._robot = self._connect_arm(port)
         self.get_logger().info(f"Robot connected: {type(self._robot).__name__}")
 
-        # Mémoire de la dernière commande reçue (format attendu par LeRobot/SO101Sim)
-        self._last_command: dict[str, float] | None = None
+        self._pending_action: dict[str, float] = {}
+        self._observation = self._robot.get_observation()
 
-        # 1. Publisher pour envoyer la position actuelle du bras à RViz2 et brain_node
         self._joint_state_pub = self.create_publisher(JointState, "/joint_states", 10)
+        self._joint_cmd_sub = self.create_subscription(JointState, "/joint_command", self._cb_joint_command, 10)
 
-        # 2. Subscriber pour écouter les ordres venant de brain_node (ou du terminal)
-        self._joint_cmd_sub = self.create_subscription(
-            JointState, "/joint_command", self._cb_joint_command, 10
-        )
-
-        # 3. Timers pour cadencer la boucle de contrôle (50 Hz) et l'envoi d'état (30 Hz)
         self.create_timer(1.0 / CONTROL_HZ, self._control_step)
         self.create_timer(1.0 / JOINT_STATE_HZ, self._publish_joint_states)
 
         if self._use_sim:
             self._start_sim_camera()
+        else:
+            self._start_usb_camera()
 
         self.get_logger().info("Driver node ready.")
 
     def _cb_joint_command(self, msg: JointState):
-        # On associe chaque nom de joint reçu à sa position cible
-        cmd = {}
-        for name, pos in zip(msg.name, msg.position):
-            if name in JOINT_NAMES:
-                # L'API attend "nom_du_joint.pos" (radians pour le bras, 0-100 % pour gripper)
-                cmd[f"{name}.pos"] = float(pos)
-        if cmd:
-            self._last_command = cmd
+        self._pending_action.update(command_to_action(list(msg.name), list(msg.position)))
 
     def _control_step(self):
-        # On envoie la dernière commande connue au robot à 50 Hz
-        if self._last_command is not None:
-            self._robot.send_action(self._last_command)
+        if self._pending_action:
+            self._robot.send_action(self._pending_action)
+            self._pending_action = {}
+        self._observation = self._robot.get_observation()
 
     def _publish_joint_states(self):
-        # On lit l'état actuel des capteurs/moteurs
-        obs = self._robot.get_observation()
-
-        msg = JointState()
+        msg = JointState(name=list(JOINT_NAMES), position=observation_to_positions(self._observation))
         msg.header.stamp = self.get_clock().now().to_msg()
-        msg.name = JOINT_NAMES
-        positions = []
-        for name in JOINT_NAMES:
-            val = float(obs[f"{name}.pos"])
-            if name == "gripper":
-                # Conversion % -> radians pour RViz2
-                val = _gripper_pct_to_rad(val)
-            positions.append(val)
-
-        msg.position = positions
         self._joint_state_pub.publish(msg)
 
     def _connect_arm(self, port: str) -> SO101Sim | SO101Follower:
@@ -158,45 +116,39 @@ class DriverNode(rclpy.node.Node):
 
     def _start_sim_camera(self):
         """Publishes the MuJoCo camera at CAMERA_HZ (provided): /external_cam/image_raw + camera_info."""
-        self._image_pub = self.create_publisher(Image, "/external_cam/image_raw", 1)
-        self._camera_info_pub = self.create_publisher(CameraInfo, "/external_cam/camera_info", 1)
-        K = self._robot.get_camera_intrinsics()
-        self._camera_info = CameraInfo(
-            width=self._robot.camera_width,
-            height=self._robot.camera_height,
-            distortion_model="plumb_bob",
-            d=[0.0] * 5,
-            k=[float(v) for v in K.flatten()],
-            r=[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
-            p=[float(v) for v in K[0]] + [0.0] + [float(v) for v in K[1]] + [0.0] + [float(v) for v in K[2]] + [0.0],
+        camera_info = build_camera_info(
+            self._robot.get_camera_intrinsics().flatten(),
+            self._robot.camera_width,
+            self._robot.camera_height,
+            CAMERA_FRAME,
         )
-        self._camera_info.header.frame_id = CAMERA_FRAME
-        self._camera_stop = threading.Event()
-        # Own thread: a render takes 30-150 ms, it must not delay /joint_states.
-        self._camera_thread = threading.Thread(target=self._sim_camera_loop, daemon=True)
-        self._camera_thread.start()
+        # shortcut: renders while your timers step the physics; fine for a camera image.
+        self._camera_publisher = FramePublisher(self, self._robot.render_camera, camera_info, CAMERA_HZ)
+        self._camera_publisher.start()
 
-    def _sim_camera_loop(self):
-        bridge = CvBridge()
-        next_frame = time.monotonic()
-        while not self._camera_stop.wait(max(0.0, next_frame - time.monotonic())):
-            next_frame += 1.0 / CAMERA_HZ
-            # shortcut: renders while your timers step the physics; fine for a camera image.
-            image = bridge.cv2_to_imgmsg(self._robot.render_camera(), encoding="rgb8")
-            image.header.stamp = self.get_clock().now().to_msg()
-            image.header.frame_id = CAMERA_FRAME
-            self._camera_info.header.stamp = image.header.stamp
-            try:
-                self._image_pub.publish(image)
-                self._camera_info_pub.publish(self._camera_info)
-            except Exception:  # ROS context already shut down (Ctrl-C)
-                return
+    def _start_usb_camera(self):
+        """Publishes the USB camera of the real arm on the same topics as the simulated one."""
+        index: int = self.declare_parameter("camera_index", 0).value
+        width: int = self.declare_parameter("camera_width", 640).value
+        height: int = self.declare_parameter("camera_height", 480).value
+        fov_deg: float = self.declare_parameter("camera_fov_deg", 70.0).value
+        if index < 0:
+            self.get_logger().info("USB camera disabled (camera_index < 0)")
+            return
+        try:
+            camera = open_usb_camera(index, width, height)
+        except Exception:
+            self._robot.disconnect()
+            raise
+        camera_info = build_camera_info(pinhole_intrinsics(width, height, fov_deg), width, height, CAMERA_FRAME)
+        self._camera_publisher = FramePublisher(self, camera.read_latest, camera_info, CAMERA_HZ, on_stop=camera.disconnect)
+        self._camera_publisher.start()
+        self.get_logger().info(f"USB camera {index} published ({width}x{height}, fov {fov_deg} deg)")
 
     def destroy_node(self):
         """Disconnects the backend (provided). On the real arm this disables the torque."""
-        if getattr(self, "_camera_thread", None) is not None:
-            self._camera_stop.set()
-            self._camera_thread.join(timeout=2.0)
+        if getattr(self, "_camera_publisher", None) is not None:
+            self._camera_publisher.stop()
         if self._robot.is_connected:
             self._robot.disconnect()
             self.get_logger().info("Robot disconnected.")

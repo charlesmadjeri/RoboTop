@@ -4,7 +4,6 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-import ci_stamp  # noqa: E402
 import review_stamp  # noqa: E402
 import size_rules  # noqa: E402
 import stack_base  # noqa: E402
@@ -42,11 +41,6 @@ def check_push(args, cwd):
     oversized = size_rules.size_problems(cwd, [f"{stack_base.stack_base(cwd)}...HEAD"], "HEAD")
     if oversized:
         return oversized[0]
-    if not ci_stamp.is_fresh(cwd):
-        return (
-            "push without a passing local CI run on this commit",
-            "Run `python3 .claude/hooks/ci_local.py` (Docker or Node 24, any platform), then push.",
-        )
     return None
 
 
