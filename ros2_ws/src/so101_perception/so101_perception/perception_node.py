@@ -5,6 +5,7 @@ from rclpy.executors import ExternalShutdownException
 from sensor_msgs.msg import CameraInfo, Image
 
 from so101_perception.camera_pose_source import make_camera_pose_source
+from so101_perception.hold_policy import DEFAULT_HOLD_FRAMES
 from so101_perception.object_publisher import ObjectPublisher
 from so101_perception.projection import CUBE_CENTER_HEIGHT, DROP_BOX_BLOB_HEIGHT
 
@@ -15,7 +16,10 @@ class PerceptionNode(rclpy.node.Node):
         pose_file: str = self.declare_parameter("camera_pose_file", "").value
         cube_height: float = self.declare_parameter("cube_height", CUBE_CENTER_HEIGHT).value
         box_height: float = self.declare_parameter("box_height", DROP_BOX_BLOB_HEIGHT).value
-        publisher = ObjectPublisher(self, make_camera_pose_source(self, pose_file), cube_height, box_height)
+        hold_frames: int = self.declare_parameter("hold_frames", DEFAULT_HOLD_FRAMES).value
+        publisher = ObjectPublisher(
+            self, make_camera_pose_source(self, pose_file), cube_height, box_height, hold_frames
+        )
         self.create_subscription(CameraInfo, "/external_cam/camera_info", publisher.on_camera_info, 1)
         self.create_subscription(Image, "/external_cam/image_raw", publisher.on_image, 1)
         source = pose_file or "the TF world -> external_cam_optical_frame"

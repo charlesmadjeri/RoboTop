@@ -108,3 +108,71 @@ def test_image_before_the_camera_info_publishes_nothing():
     publisher.on_image(image_of("both"))
     assert node.publishers[OBJECT_TOPIC].messages == []
     assert node.logger.warnings == []
+
+
+def stamped(image, sec):
+    image.header.stamp = Time(sec=sec, nanosec=0)
+    return image
+
+
+def test_a_cube_that_disappears_is_republished_with_its_old_stamp_for_five_frames():
+    node, publisher, _ = start()
+    publisher.on_image(stamped(image_of("both"), 1))
+    for sec in range(2, 7):
+        publisher.on_image(stamped(image_of("empty"), sec))
+    messages = node.publishers[OBJECT_TOPIC].messages
+    assert len(messages) == 6
+    assert {message.header.stamp.sec for message in messages} == {1}
+    assert messages[0].pose.position == messages[-1].pose.position
+
+
+def test_nothing_is_published_from_the_sixth_frame_without_the_cube():
+    node, publisher, _ = start()
+    publisher.on_image(image_of("both"))
+    for _ in range(6):
+        publisher.on_image(image_of("empty"))
+    assert len(node.publishers[OBJECT_TOPIC].messages) == 6
+    assert len(node.publishers[DROP_BOX_TOPIC].messages) == 6
+
+
+def test_seeing_the_cube_again_publishes_it_with_the_new_stamp():
+    node, publisher, _ = start()
+    publisher.on_image(stamped(image_of("both"), 1))
+    publisher.on_image(stamped(image_of("empty"), 2))
+    publisher.on_image(stamped(image_of("both_other_pose"), 3))
+    last = node.publishers[OBJECT_TOPIC].messages[-1]
+    assert last.header.stamp.sec == 3
+
+
+def test_the_cube_and_the_box_are_held_independently():
+    node, publisher, _ = start()
+    publisher.on_image(stamped(image_of("both"), 1))
+    for sec in range(2, 9):
+        publisher.on_image(stamped(image_of("box_only"), sec))
+    cube_stamps = [message.header.stamp.sec for message in node.publishers[OBJECT_TOPIC].messages]
+    box_stamps = [message.header.stamp.sec for message in node.publishers[DROP_BOX_TOPIC].messages]
+    assert cube_stamps == [1] * 6
+    assert box_stamps == [1, *range(2, 9)]
+
+
+def test_the_hold_length_is_a_parameter():
+    node = FakeNode()
+    publisher = ObjectPublisher(
+        node, lambda: ROBOT_FROM_CAMERA, CUBE_CENTER_HEIGHT, DROP_BOX_BLOB_HEIGHT, hold_frames=1
+    )
+    publisher.on_camera_info(camera_info())
+    publisher.on_image(image_of("both"))
+    for _ in range(3):
+        publisher.on_image(image_of("empty"))
+    assert len(node.publishers[OBJECT_TOPIC].messages) == 2
+
+
+def test_frames_without_a_camera_pose_do_not_age_the_held_cube():
+    node, publisher, holder = start()
+    publisher.on_image(stamped(image_of("both"), 1))
+    holder["pose"] = None
+    for _ in range(10):
+        publisher.on_image(image_of("empty"))
+    holder["pose"] = ROBOT_FROM_CAMERA
+    publisher.on_image(image_of("empty"))
+    assert len(node.publishers[OBJECT_TOPIC].messages) == 2
