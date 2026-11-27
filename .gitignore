@@ -36,3 +36,4 @@ Thumbs.db
 *.bag
 *.mcap
 rosbag2_*/
+artifacts/
