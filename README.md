@@ -92,7 +92,7 @@ pixi run launch --backend real --port <port> --profile camx
 
 The arm is free by hand and ignores commands by default. Add `--torque` when the arm has to move, for example for `calibrate_from_arm`: it holds the present position, then follows `/joint_command`. Keep the power switch in reach.
 
-Copy it to `profiles/<name>.json` for another camera. Once the camera is calibrated, add `"camera_pose_file": "camera_pose.json"` so the perception node uses it.
+Copy it to `profiles/<name>.json` for another camera. `profiles/camx.json` loads `camera_pose.json` from the repo root (a relative `camera_pose_file` resolves from there, the file is gitignored): calibrate first, or the stack stops with a missing pose file. A new camera without a calibration leaves `camera_pose_file` out.
 
 - **Linux**: `sudo usermod -aG dialout $USER`, then log out and back in. Use the port's stable name from `ls -l /dev/serial/by-id/`: `/dev/ttyACM0` can change when you plug the arms in another order. Another way to find the port, watch it appear when you plug the USB cable:
   `sudo udevadm monitor --subsystem-match=tty --property | grep --line-buffered -E "(DEVNAME=|ACTION=)"`

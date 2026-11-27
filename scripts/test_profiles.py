@@ -51,6 +51,15 @@ def test_missing_explicit_value_keeps_the_profile():
     assert profiles.launch_arguments({"camera_index": 0}, {"camera_index": None}) == ["camera_index:=0"]
 
 
+def test_a_relative_pose_file_resolves_from_the_repo_root():
+    arguments = profiles.launch_arguments({"camera_pose_file": "camera_pose.json"}, {})
+    assert arguments == [f"camera_pose_file:={profiles.PROFILES_DIR.parent / 'camera_pose.json'}"]
+
+
+def test_an_absolute_pose_file_is_kept():
+    assert profiles.launch_arguments({"camera_pose_file": "/data/pose.json"}, {}) == ["camera_pose_file:=/data/pose.json"]
+
+
 def test_no_profile_and_no_value_adds_no_argument():
     assert profiles.launch_arguments({}, {"camera_index": None}) == []
 
