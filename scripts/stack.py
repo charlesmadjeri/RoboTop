@@ -8,6 +8,7 @@ Ctrl-C stops it cleanly so destroy_node() runs (the real arm gets a proper disco
     pixi run launch --backend real                         # port from SO101_PORT
     pixi run launch --backend real --camera-index 2       # USB camera index (or SO101_CAMERA, -1 disables)
     pixi run launch --backend real --profile camx         # camera settings of profiles/camx.json
+    pixi run launch --backend real --profile camx --torque  # the arm follows commands (calibrate_from_arm)
 """
 import argparse
 import os
@@ -27,6 +28,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--backend", choices=["sim", "real"], default="sim", help="same stack, simulated or real arm")
 parser.add_argument("--port", default=os.environ.get("SO101_PORT"), help="serial port of the real arm (or SO101_PORT)")
 parser.add_argument("--camera-index", default=None, help="USB camera index of the real arm, -1 disables it (or SO101_CAMERA)")
+parser.add_argument("--torque", action="store_true", help="real arm: enable the torque so the arm follows commands (default: free by hand)")
 parser.add_argument("--profile", help=f"camera settings of profiles/<name>.json ({', '.join(profiles.available()) or 'none yet'})")
 opts = parser.parse_args()
 if opts.backend == "real" and not opts.port:
@@ -46,7 +48,7 @@ if os.name == "nt":  # ros2 launch only shows lines ending with \r\n on Windows,
 
 use_sim = "true" if opts.backend == "sim" else "false"
 # --noninteractive: ros2 launch forwards Ctrl-C to the nodes (own session, see below).
-command = ["ros2", "launch", *(["--noninteractive"] if os.name != "nt" else []), "so101_bringup", "so101.launch.py", f"use_sim:={use_sim}", *([f"port:={opts.port}"] if opts.port else []), *camera_arguments]
+command = ["ros2", "launch", *(["--noninteractive"] if os.name != "nt" else []), "so101_bringup", "so101.launch.py", f"use_sim:={use_sim}", *([f"port:={opts.port}"] if opts.port else []), *(["enable_torque:=true"] if opts.torque else []), *camera_arguments]
 # POSIX: own session, so a terminal Ctrl-C reaches the nodes once (from ros2 launch),
 # not twice, which would interrupt destroy_node().
 proc = subprocess.Popen(command, start_new_session=os.name != "nt", stdout=subprocess.PIPE, stderr=subprocess.STDOUT)

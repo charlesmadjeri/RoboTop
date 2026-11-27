@@ -60,6 +60,11 @@ def test_the_shipped_profile_is_valid():
 
 
 @pytest.mark.parametrize("launch_file", LAUNCH_KEYS, ids=lambda path: path.name)
+def test_launch_files_declare_the_torque_argument(launch_file):
+    assert '"enable_torque"' in launch_file.read_text()
+
+
+@pytest.mark.parametrize("launch_file", LAUNCH_KEYS, ids=lambda path: path.name)
 def test_launch_files_declare_every_profile_key(launch_file):
     text = launch_file.read_text()
     assert [key for key in LAUNCH_KEYS[launch_file] if f'"{key}"' not in text] == []
