@@ -51,10 +51,10 @@ class DriverNode(rclpy.node.Node):
         super().__init__("so101_driver")
         self._use_sim: bool = self.declare_parameter("use_sim", True).value
         port: str = self.declare_parameter("port", "").value
-        self._enable_torque: bool = self.declare_parameter("enable_torque", False).value
+        enable_torque: bool = self.declare_parameter("enable_torque", False).value
         self.get_logger().info("Mode: simulation" if self._use_sim else f"Mode: hardware (port={port})")
 
-        self._robot = self._connect_arm(port)
+        self._robot = self._connect_arm(port, enable_torque)
         self.get_logger().info(f"Robot connected: {type(self._robot).__name__}")
 
         self._pending_action: dict[str, float] = {}
@@ -87,7 +87,7 @@ class DriverNode(rclpy.node.Node):
         msg.header.stamp = self.get_clock().now().to_msg()
         self._joint_state_pub.publish(msg)
 
-    def _connect_arm(self, port: str) -> SO101Sim | SO101Follower:
+    def _connect_arm(self, port: str, enable_torque: bool = False) -> SO101Sim | SO101Follower:
         """Creates and connects the backend chosen by use_sim (provided)."""
         if self._use_sim:
             robot = SO101Sim()
@@ -113,8 +113,8 @@ class DriverNode(rclpy.node.Node):
                 f"{calibration_file} does not match the motors: wrong file for this arm? "
                 "Re-run `lerobot-calibrate`."
             )
-        set_torque(robot, self._enable_torque)
-        if self._enable_torque:
+        set_torque(robot, enable_torque)
+        if enable_torque:
             self.get_logger().warn("Torque enabled: the arm follows /joint_command, keep the power switch in reach.")
         else:
             self.get_logger().info("Torque disabled: arm can be moved freely by hand. Pass enable_torque:=true to control the arm.")

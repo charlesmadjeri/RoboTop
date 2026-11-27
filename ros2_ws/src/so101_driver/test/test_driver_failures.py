@@ -6,9 +6,9 @@ import pytest
 from so101_driver.driver_node import DriverNode
 
 
-def connect(port="/dev/fake"):
+def connect(port="/dev/fake", enable_torque=False):
     node = SimpleNamespace(_use_sim=False, get_logger=lambda: logging.getLogger("driver"))
-    return DriverNode._connect_arm(node, port)
+    return DriverNode._connect_arm(node, port, enable_torque)
 
 
 @pytest.fixture
@@ -71,3 +71,13 @@ def test_released_arm_keeps_its_position_when_commanded(calibration_file, monkey
     robot.send_action({"shoulder_pan.pos": 0.5})
     assert bus.registers[1]["goal_position"] != 2048
     assert bus.registers[1]["present_position"] == 2048
+
+
+def test_enabled_torque_holds_the_present_position_instead_of_the_stale_goal(calibration_file, monkeypatch):
+    bus = fake_arm.install(monkeypatch, fake_arm.calibrated_bus())
+    bus.registers[1]["present_position"] = 2300
+    bus.registers[1]["goal_position"] = 1000
+    robot = connect(enable_torque=True)
+    assert robot.is_connected
+    assert {motor["torque_enable"] for motor in bus.registers.values()} == {1}
+    assert bus.registers[1]["goal_position"] == 2300
