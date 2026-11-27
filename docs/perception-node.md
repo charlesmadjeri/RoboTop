@@ -27,7 +27,7 @@ Without a pose (file missing at start stops the node, TF not yet there only warn
 In simulation the driver publishes the TF, so the default works. On the real arm, calibrate first and pass the file:
 
 ```
-ros2 launch so101_bringup so101.launch.py use_sim:=false port:=<port> camera_pose_file:=camera_pose.json
+ros2 launch so101_bringup so101.launch.py use_sim:=false port:=<port> camera_fov_deg:=75 camera_pose_file:=camera_pose.json
 ```
 
 `pixi run launch` does not forward `camera_pose_file`, so call `ros2 launch` after `pixi run build` (inside `pixi shell`).
@@ -56,6 +56,6 @@ cube error 0.33 cm on average, 0.88 cm at most, no miss. Drop box error 0.12 cm.
 ## Known limits
 
 - The HSV thresholds of `detection.py` are tuned on the simulated colors only. A real camera frame needs its own tuning.
-- The real `K` is an estimate from the field of view, and the pose from one marker is a few millimeters accurate at best.
+- The real `K` is an estimate from the field of view, and the pose from the cube places is a few millimeters accurate at best (`docs/camera-calibration.md`).
 - The cube must rest on the table: a lifted cube is projected too far from the camera.
 - A frame where the arm hides the cube publishes nothing for the cube.
