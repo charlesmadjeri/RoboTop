@@ -64,6 +64,7 @@ On the real arm, the USB camera is published on `/external_cam/image_raw` at 10 
 
 - `camera_index`: USB camera index of the real arm, default `0`. `-1` disables the camera. Real arm only.
   Get the index from `lerobot-find-cameras opencv`.
+- `enable_torque`: real arm only, default `false` (the arm is free by hand and ignores commands).
 - `camera_width`: image width, default `640`.
 - `camera_height`: image height, default `480`.
 - `camera_fov_deg`: horizontal field of view used to estimate the intrinsics, default `70`.
@@ -99,8 +100,10 @@ PYTHONPATH=. PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest test
 
 ## Known limits
 
-- Real arm: the torque is disabled in `_connect_arm` on purpose, so commands move nothing until you
-  remove that line. The real-arm path was not run when this driver was written.
+- Real arm: the torque is disabled by default, on purpose, so commands move nothing and the arm is free by hand.
+  `enable_torque:=true` (`--torque` of `pixi run launch`) holds the present position, then lets the arm follow
+  `/joint_command`. Connecting the motors briefly enables the torque with their last goal, so keep the arm clear of
+  obstacles at start.
 - Commands are not clipped to the joint limits of the URDF by the driver.
 - An exception raised by the backend read (for example a USB hiccup on the real arm) is not caught and
   ends the node. Whether to retry or to stop is still to be decided.

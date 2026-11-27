@@ -26,6 +26,7 @@ from so101_driver.camera_info import build_camera_info, pinhole_intrinsics
 from so101_driver.frame_publisher import FramePublisher
 from so101_driver.joint_codec import JOINT_NAMES, command_to_action, observation_to_positions
 from so101_driver.sim_camera_pose import camera_transform
+from so101_driver.torque import set_torque
 from so101_driver.usb_camera import open_usb_camera
 
 CONTROL_HZ = 50.0
@@ -50,6 +51,7 @@ class DriverNode(rclpy.node.Node):
         super().__init__("so101_driver")
         self._use_sim: bool = self.declare_parameter("use_sim", True).value
         port: str = self.declare_parameter("port", "").value
+        self._enable_torque: bool = self.declare_parameter("enable_torque", False).value
         self.get_logger().info("Mode: simulation" if self._use_sim else f"Mode: hardware (port={port})")
 
         self._robot = self._connect_arm(port)
@@ -111,10 +113,11 @@ class DriverNode(rclpy.node.Node):
                 f"{calibration_file} does not match the motors: wrong file for this arm? "
                 "Re-run `lerobot-calibrate`."
             )
-        robot.bus.disable_torque()  # Comment out this line to control the robot.
-        self.get_logger().info(
-            "Torque disabled: arm can be moved freely by hand. Remove this part to control the arm."
-        )
+        set_torque(robot, self._enable_torque)
+        if self._enable_torque:
+            self.get_logger().warn("Torque enabled: the arm follows /joint_command, keep the power switch in reach.")
+        else:
+            self.get_logger().info("Torque disabled: arm can be moved freely by hand. Pass enable_torque:=true to control the arm.")
         return robot
 
     def _start_sim_camera(self):

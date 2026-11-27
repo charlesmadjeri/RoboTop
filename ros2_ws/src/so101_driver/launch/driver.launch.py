@@ -17,6 +17,8 @@ def generate_launch_description():
                               description="Simulated backend or real robot"),
         DeclareLaunchArgument("port", default_value="",
                               description="Serial port of the real SO-ARM101 (lerobot-find-port)"),
+        DeclareLaunchArgument("enable_torque", default_value="false",
+                              description="Real arm only: true lets the arm follow commands, false leaves it free by hand"),
         DeclareLaunchArgument("camera_index", default_value="0",
                               description="USB camera index of the real arm, -1 disables it"),
         DeclareLaunchArgument("camera_fov_deg", default_value="70.0",
@@ -33,6 +35,7 @@ def generate_launch_description():
             parameters=[{
                 "use_sim": ParameterValue(LaunchConfiguration("use_sim"), value_type=bool),
                 "port": LaunchConfiguration("port"),
+                "enable_torque": ParameterValue(LaunchConfiguration("enable_torque"), value_type=bool),
                 "camera_index": ParameterValue(LaunchConfiguration("camera_index"), value_type=int),
                 "camera_fov_deg": ParameterValue(LaunchConfiguration("camera_fov_deg"), value_type=float),
                 "camera_width": ParameterValue(LaunchConfiguration("camera_width"), value_type=int),
