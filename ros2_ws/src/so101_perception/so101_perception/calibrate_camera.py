@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 
 from so101_perception.camera_pose import intrinsics_from_horizontal_fov, solve_camera_pose
-from so101_perception.detection import find_cube
+from so101_perception.detector import detect_cube
 from so101_perception.pose_file import save_pose
 from so101_perception.projection import CUBE_CENTER_HEIGHT, project_to_plane
 
@@ -35,7 +35,7 @@ def read_cube_pixel(path: str) -> tuple[tuple[float, float], tuple[int, int]]:
     bgr = cv2.imread(path)
     if bgr is None:
         sys.exit(f"cannot read the image {path}")
-    pixel = find_cube(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB))
+    pixel = detect_cube(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB))
     if pixel is None:
         sys.exit(f"cube not found in {path}")
     return pixel, bgr.shape[1::-1]
