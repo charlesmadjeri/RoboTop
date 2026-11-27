@@ -11,7 +11,7 @@ from so101_perception.arm_poses import PRESET_POSES, check_within_limits, load_p
 from so101_perception.arm_session import Samples, collect_samples
 from so101_perception.arm_validation import leave_one_out_errors
 from so101_perception.camera_pose import intrinsics_from_horizontal_fov
-from so101_perception.detection import find_cube
+from so101_perception.detector import detect_cube
 from so101_perception.pose_file import save_pose
 from so101_perception.ros_rig import RosArm, RosCamera, read_camera_matrix
 
@@ -126,7 +126,7 @@ def run_on_robot(args, poses: np.ndarray) -> None:
             set_gripper(arm, args.grip[0])
             input("Put the cube between the open jaws and press Enter: ")
             set_gripper(arm, args.grip[1])
-        samples = collect_samples(arm, camera, find_cube, poses, args.speed)
+        samples = collect_samples(arm, camera, detect_cube, poses, args.speed)
     except KeyboardInterrupt:
         sys.exit("stopped, the arm stays where it is")
     except RuntimeError as problem:

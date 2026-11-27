@@ -5,7 +5,7 @@ from sim_arm import SimArm, SimRig
 from so101_perception.arm_poses import PRESET_POSES
 from so101_perception.arm_session import collect_samples
 from so101_perception.calibrate_from_arm import evaluate, refusal
-from so101_perception.detection import find_cube
+from so101_perception.detector import detect_cube
 from so101_perception.projection import project_to_plane
 
 GRASP_OFFSET = np.array([0.0, 0.01, 0.02])
@@ -23,7 +23,7 @@ def table_error(arm: SimArm, found: np.ndarray) -> float:
 
 def test_the_command_sequence_on_the_simulated_arm_recovers_the_camera_pose(arm):
     rig = SimRig(arm, GRASP_OFFSET, start=PRESET_POSES[0])
-    samples = collect_samples(rig, rig, find_cube, PRESET_POSES, SPEED, report=lambda line: None)
+    samples = collect_samples(rig, rig, detect_cube, PRESET_POSES, SPEED, report=lambda line: None)
     assert len(samples.kept) >= 10
     evaluation = evaluate(samples, arm.K)
     translation, angle = pose_error(evaluation.calibration.robot_from_camera, arm.robot_from_camera)
@@ -34,6 +34,6 @@ def test_the_command_sequence_on_the_simulated_arm_recovers_the_camera_pose(arm)
 
 def test_the_moves_are_slow_steps_that_never_jump_between_poses(arm):
     rig = SimRig(arm, GRASP_OFFSET, start=PRESET_POSES[0])
-    collect_samples(rig, rig, find_cube, PRESET_POSES[:3], SPEED, report=lambda line: None)
+    collect_samples(rig, rig, detect_cube, PRESET_POSES[:3], SPEED, report=lambda line: None)
     steps = np.abs(np.diff(np.vstack(rig.commands), axis=0)).max()
     assert steps <= SPEED / 20.0 + 1e-9

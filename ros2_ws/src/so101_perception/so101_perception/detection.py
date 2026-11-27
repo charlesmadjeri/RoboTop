@@ -16,8 +16,8 @@ def find_cube(rgb: np.ndarray) -> Pixel | None:
     return _find(rgb, CUBE_HSV_RANGES)
 
 
-def find_drop_box(rgb: np.ndarray) -> Pixel | None:
-    return _find(rgb, BOX_HSV_RANGES)
+def find_drop_box(rgb: np.ndarray, ranges=BOX_HSV_RANGES) -> Pixel | None:
+    return _find(rgb, ranges)
 
 
 def _find(rgb: np.ndarray, ranges) -> Pixel | None:
