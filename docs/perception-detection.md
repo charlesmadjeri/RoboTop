@@ -121,8 +121,8 @@ white desk with black cables and a dark power adapter, no drop box. The cube cen
 | lab_geometry | 20/20 | 3.2 | 20/20 |
 | yolo and yolo_vulkan | 0/20 | n/a | 20/20 |
 
-- The HSV ranges tuned on the simulation find the real cube, although the printed cube is hollow (cut-out windows)
-  and the sim cube is solid.
+- The HSV ranges tuned on the simulation find the real cube. The printed cube is hollow (cut-out windows) and so is
+  the sim cube (`hollow_cube_rhombus_50mm.stl`).
 - `yolo`, trained on rendered frames only, finds the object at the right position (within 2 px) and calls it a
   box. It does not transfer. It needs real labelled frames, or a mix with the rendered ones, before it can be used.
 - Every method reports a box that is not there. The brown range (hue 5 to 20, saturation 100 and up) matches the

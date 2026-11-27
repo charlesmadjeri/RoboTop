@@ -21,7 +21,7 @@ at the height of the visible mass, not at the base.
 
 | Target | Plane height | Why |
 |---|---|---|
-| Cube | `CUBE_CENTER_HEIGHT` = 0.025 m | Center of the 5 cm cube |
+| Cube | `CUBE_CENTER_HEIGHT` = 0.025 m | Center of the 50 mm cube (see below) |
 | Drop box | `DROP_BOX_BLOB_HEIGHT` = 0.025 m | Mid height of the 5 cm walls, which dominate the blob |
 
 Measured on the simulated scenes (distance on the table between the projected detection and the ground truth):
@@ -31,6 +31,13 @@ Measured on the simulated scenes (distance on the table between the projected de
 | 0.000 m (table) | 2.0 to 2.2 cm | 1.7 to 2.0 cm |
 | 0.015 m | 0.9 to 1.0 cm | 0.4 to 0.8 cm |
 | 0.025 m | 0.2 to 0.3 cm | 0.1 to 0.5 cm |
+
+The cube is the printed part `hollow_cube_rhombus_50mm.stl`, the same as on the real robot. Measured on the mesh: 50 x 50 x 50 mm,
+origin at the center of the bottom face, so the center is at 25 mm (`test_cube_model.py` pins `CUBE_CENTER_HEIGHT` to it).
+It is hollow, 62 cm3 of material in a 125 cm3 envelope, pierced by diamond tunnels. The holes do not move the pixel:
+the detector takes the moments of the external contour. On the hollow cube lying on a grid of 20 places in the simulator
+(640x480), the plane at 0.025 m is the best of all the heights tried from 0 to 0.06 m in 5 mm steps (0.43 cm on average,
+1.7 cm at worst; 0.02 m gives 0.7 cm and 0.03 m 0.65 cm). A cube of another size needs its own `cube_height`.
 
 Projecting on the table would push every detection about 2 cm farther from the camera along its ray.
 The drop box is a position on the table: only the `x, y` of its point matter, its base is at `z = 0`.
