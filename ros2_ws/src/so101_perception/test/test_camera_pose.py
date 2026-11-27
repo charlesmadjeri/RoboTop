@@ -2,43 +2,65 @@ import math
 
 import numpy as np
 import pytest
-from marker_scene import K, ROBOT_FROM_CAMERA, WIDTH, HEIGHT, pose_error, project_marker
+from cube_scene import HEIGHT, K, PLACES, ROBOT_FROM_CAMERA, WIDTH, pose_error, project_places
 
-from so101_perception.camera_pose import intrinsics_from_horizontal_fov, robot_from_marker, solve_camera_pose
+from so101_perception.camera_pose import intrinsics_from_horizontal_fov, solve_camera_pose
 from so101_perception.pose_file import load_pose, save_pose
+from so101_perception.projection import CUBE_CENTER_HEIGHT
 
-SIZE = 0.1
 
-
-@pytest.mark.parametrize("position, yaw", [((0.2, 0.15, 0.0), 0.0), ((0.25, 0.05, 0.0), 25.0), ((0.1, 0.2, 0.0), -70.0)])
-def test_exact_marker_corners_give_back_the_camera_pose(position, yaw):
-    marker_pose = robot_from_marker(position, yaw)
-    corners = project_marker(ROBOT_FROM_CAMERA, marker_pose, SIZE)
-    found, error = solve_camera_pose(corners, SIZE, marker_pose, K)
+def test_exact_cube_pixels_give_back_the_camera_pose():
+    pixels = project_places(ROBOT_FROM_CAMERA, PLACES)
+    found, error = solve_camera_pose(pixels, np.array(PLACES), CUBE_CENTER_HEIGHT, K)
     translation, angle = pose_error(found, ROBOT_FROM_CAMERA)
     assert translation < 1e-6 and angle < 1e-4
     assert error < 1e-6
 
 
-def test_noisy_corners_move_the_pose_by_millimeters_and_raise_the_reprojection_error():
-    marker_pose = robot_from_marker((0.2, 0.15, 0.0), 25.0)
-    corners = project_marker(ROBOT_FROM_CAMERA, marker_pose, SIZE)
-    noisy = corners + np.random.default_rng(1).normal(0, 0.3, corners.shape)
-    found, error = solve_camera_pose(noisy, SIZE, marker_pose, K)
-    translation, _ = pose_error(found, ROBOT_FROM_CAMERA)
-    assert 0 < error < 1.0
-    assert translation < 0.01
+def test_four_places_are_enough():
+    four = [PLACES[0], PLACES[1], PLACES[4], PLACES[5]]
+    pixels = project_places(ROBOT_FROM_CAMERA, four)
+    found, _ = solve_camera_pose(pixels, np.array(four), CUBE_CENTER_HEIGHT, K)
+    assert pose_error(found, ROBOT_FROM_CAMERA)[0] < 1e-6
 
 
-def test_marker_yaw_rotates_the_marker_around_the_vertical_axis():
-    pose = robot_from_marker((0.1, 0.2, 0.0), 90.0)
-    assert pose[:3, :3] @ [1, 0, 0] == pytest.approx([0, 1, 0], abs=1e-12)
-    assert pose[:3, 3] == pytest.approx([0.1, 0.2, 0.0])
+def test_noisy_pixels_move_the_pose_by_millimeters_and_raise_the_reprojection_error():
+    pixels = project_places(ROBOT_FROM_CAMERA, PLACES)
+    noisy = pixels + np.random.default_rng(1).normal(0, 0.5, pixels.shape)
+    found, error = solve_camera_pose(noisy, np.array(PLACES), CUBE_CENTER_HEIGHT, K)
+    translation, angle = pose_error(found, ROBOT_FROM_CAMERA)
+    assert 0 < error < 1.5
+    assert translation < 0.01 and angle < 1.0
+
+
+def test_cube_height_shifts_the_plane_the_places_lie_on():
+    lifted = np.array([[x, y, 0.05, 1.0] for x, y in PLACES]).T
+    in_camera = (np.linalg.inv(ROBOT_FROM_CAMERA) @ lifted)[:3]
+    pixels = K @ in_camera
+    found, _ = solve_camera_pose((pixels[:2] / pixels[2]).T, np.array(PLACES), 0.05, K)
+    assert pose_error(found, ROBOT_FROM_CAMERA)[0] < 1e-6
+
+
+def test_fewer_than_four_places_are_refused():
+    with pytest.raises(ValueError, match="at least 4 cube places"):
+        solve_camera_pose(project_places(ROBOT_FROM_CAMERA, PLACES[:3]), np.array(PLACES[:3]), CUBE_CENTER_HEIGHT, K)
+
+
+def test_places_on_a_line_are_refused():
+    line = [(0.1 + 0.05 * step, 0.2) for step in range(5)]
+    with pytest.raises(ValueError, match="lie on a line"):
+        solve_camera_pose(project_places(ROBOT_FROM_CAMERA, line), np.array(line), CUBE_CENTER_HEIGHT, K)
+
+
+def test_places_with_swapped_axes_are_refused_when_the_camera_comes_out_below_the_table():
+    swapped = np.array(PLACES)[:, ::-1]
+    with pytest.raises(ValueError, match="below the cube plane"):
+        solve_camera_pose(project_places(ROBOT_FROM_CAMERA, PLACES), swapped, CUBE_CENTER_HEIGHT, K)
 
 
 def test_field_of_view_sets_the_focal_length_and_centers_the_principal_point():
-    matrix = intrinsics_from_horizontal_fov(WIDTH, HEIGHT, 70.0)
-    assert matrix[0, 0] == pytest.approx(WIDTH / 2 / math.tan(math.radians(35)))
+    matrix = intrinsics_from_horizontal_fov(WIDTH, HEIGHT, 75.0)
+    assert matrix[0, 0] == pytest.approx(WIDTH / 2 / math.tan(math.radians(37.5)))
     assert matrix[0, 0] == matrix[1, 1]
     assert (matrix[0, 2], matrix[1, 2]) == (WIDTH / 2, HEIGHT / 2)
 
